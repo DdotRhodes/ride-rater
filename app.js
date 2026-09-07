@@ -34,6 +34,19 @@
   var prefs = load(K.prefs, { extras: false, separate: false });
 
   var RIDES = window.RIDES, PARKS = window.PARKS;
+  var FLAGS = window.FLAGS || {};
+  /* Trip flags live in their own table in data.js so the ride list stays a
+     plain catalogue. Fold them onto the rides once, here. */
+  (function () {
+    var trip = window.TRIP_FLAGS || {};
+    RIDES.forEach(function (r) {
+      var t = trip[r.id];
+      if (!t) { r.f = []; return; }
+      r.f = t.f || [];
+      if (t.n) r.note = r.note ? r.note + " · " + t.n : t.n;
+    });
+  })();
+  function hasFlag(r, f) { return r.f.indexOf(f) !== -1; }
   var byId = {};
   RIDES.forEach(function (r) { byId[r.id] = r; });
 
@@ -339,11 +352,20 @@
 
   function visible(r) {
     if (r.tag && !prefs.separate) return false;
-    if (r.type !== "ride" && !prefs.extras) return false;
+    /* A must-do show — WaterWorld, say — is the last thing that should hide
+       itself behind a preference. Everything else obeys the extras toggle. */
+    if (r.type !== "ride" && !prefs.extras && !hasFlag(r, "must")) return false;
     return true;
   }
   function parkRides(park) {
     return RIDES.filter(function (r) { return r.p === park && visible(r); });
+  }
+  /* Asking for the flagged rides means asking for all of them, shows included;
+     the separate-ticket toggle still applies. */
+  function flaggedRides(park, flag) {
+    return RIDES.filter(function (r) {
+      return r.p === park && hasFlag(r, flag) && (visible(r) || !r.tag);
+    });
   }
   function ratedCount(park) {
     var list = parkRides(park), n = 0;
@@ -354,6 +376,12 @@
     return { show: "Show", walk: "Walk-through", play: "Play area" }[t] || "";
   }
   function shortName(s) { return String(s || "").split(" ")[0].slice(0, 8); }
+  function badges(r) {
+    return r.f.map(function (f) {
+      var d = FLAGS[f];
+      return d ? '<span class="badge ' + d.cls + '">' + esc(d.label) + "</span>" : "";
+    }).join("");
+  }
 
   /* ---------------- rendering: rides ---------------- */
   function renderParkTabs() {
@@ -378,7 +406,9 @@
   function renderList() {
     var el = $("#list");
     var q = state.q.trim().toLowerCase();
-    var list = parkRides(state.park).filter(function (r) {
+    var flagFilter = FLAGS[state.filter] ? state.filter : null;
+    var pool = flagFilter ? flaggedRides(state.park, flagFilter) : parkRides(state.park);
+    var list = pool.filter(function (r) {
       if (q && r.n.toLowerCase().indexOf(q) === -1 && r.land.toLowerCase().indexOf(q) === -1) return false;
       if (state.filter === "todo" && ratings[r.id]) return false;
       if (state.filter === "done" && !ratings[r.id]) return false;
@@ -413,8 +443,9 @@
       if (typeLabel(r.type)) sub.push(typeLabel(r.type));
       if (r.note) sub.push(r.note);
       if (mine && mine.n) sub.push("“" + mine.n + "”");
-      html += '<button class="item" data-id="' + r.id + '"><div class="item-main">' +
-        '<div class="item-name">' + esc(r.n) + "</div>" +
+      html += '<button class="item' + (hasFlag(r, "closed") ? " closed" : "") + '" data-id="' + r.id + '">' +
+        '<div class="item-main">' +
+        '<div class="item-name">' + esc(r.n) + badges(r) + "</div>" +
         (sub.length ? '<div class="item-sub">' + esc(sub.join(" · ")) + "</div>" : "") +
         "</div>" + right + "</button>";
     });
@@ -553,9 +584,26 @@
       '<div class="stat"><div class="v" style="font-size:15px;line-height:1.3">' + esc(bestPark) + '</div><div class="k">Best park so far</div></div>';
   }
 
+  /* "Day only" only means something at Universal, where the day park shuts at
+     6pm and the HHN ticket takes over. Hide the chip elsewhere, and don't
+     strand the user on an empty list if they switch parks while it's active. */
+  function syncFilterChips() {
+    var chip = $('#filterChips .chip[data-filter="day"]');
+    if (!chip) return;
+    var show = state.park === "USH";
+    chip.classList.toggle("hidden", !show);
+    if (!show && state.filter === "day") {
+      state.filter = "all";
+      $$("#filterChips .chip").forEach(function (x) {
+        x.classList.toggle("active", x.dataset.filter === "all");
+      });
+    }
+  }
+
   function renderAll() {
     renderParkTabs();
     renderProgress();
+    syncFilterChips();
     if (state.view === "rides") renderList();
     if (state.view === "rank") renderRank();
     if (state.view === "compare") { renderSync(); renderCompare(); }
@@ -640,7 +688,7 @@
     var existing = ratings[id];
     state.pick = existing ? existing.s : null;
 
-    $("#sheetName").textContent = r.n;
+    $("#sheetName").innerHTML = esc(r.n) + badges(r);
     var meta = [r.land];
     if (typeLabel(r.type)) meta.push(typeLabel(r.type));
     if (r.note) meta.push(r.note);
