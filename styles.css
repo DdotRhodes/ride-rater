@@ -98,6 +98,11 @@ main{padding-bottom:calc(78px + var(--safe-b))}
 .shareout{margin-top:12px;background:var(--bg3);border-radius:10px;padding:10px;font-size:11px;
   color:var(--mut);word-break:break-all;max-height:96px;overflow:auto}
 
+/* ---------- live sync ---------- */
+.tripcode{margin:12px 0;background:var(--bg3);border:1px solid var(--line);border-radius:12px;
+  padding:14px 10px;text-align:center;font-size:26px;font-weight:700;letter-spacing:.16em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;user-select:all}
+
 /* ---------- compare ---------- */
 .cmprow{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--line);
   border-radius:14px;padding:12px 13px;margin-bottom:8px}
