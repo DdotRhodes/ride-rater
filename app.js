@@ -7,6 +7,12 @@
   var K = { me: "rr.me", ratings: "rr.ratings", peers: "rr.peers", prefs: "rr.prefs", trip: "rr.trip" };
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  // <main> is the scroll container, not the window — see the app shell in styles.css.
+  function scrollMainTop() {
+    var m = $("#main");
+    if (m) m.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
 
   function load(k, d) {
     try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }
@@ -358,7 +364,7 @@
         esc(p.short) + ' <span class="muted">' + c.n + "/" + c.total + "</span></button>";
     }).join("");
     $$("#parkTabs .ptab").forEach(function (b) {
-      b.onclick = function () { state.park = b.dataset.park; renderAll(); window.scrollTo(0, 0); };
+      b.onclick = function () { state.park = b.dataset.park; renderAll(); scrollMainTop(); };
     });
   }
 
@@ -736,7 +742,7 @@
     $("#view-" + v).classList.remove("hidden");
     $$(".tab").forEach(function (t) { t.classList.toggle("active", t.dataset.view === v); });
     renderAll();
-    window.scrollTo(0, 0);
+    scrollMainTop();
   }
 
   function boot() {
