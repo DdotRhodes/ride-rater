@@ -161,3 +161,86 @@ window.RIDES = [
   { id: "ca-oogie-grove",  p: "DCA", land: "Oogie Boogie Bash", n: "Villains Grove", type: "walk", tag: "oogie" },
   { id: "ca-oogie-leota",  p: "DCA", land: "Oogie Boogie Bash", n: "Madame Leota's Swinging Wake", type: "show", tag: "oogie" },
 ];
+
+/* ---------------- Trip flags — 18–20 September 2026 ----------------
+   Set for this specific trip: Universal Fri 18 (2pm entry + HHN after dark),
+   California Adventure Sat 19, Disneyland Sun 20.
+
+   must   – don't leave the park without it
+   skip   – fine to walk past: long wait, short payoff, or a near-clone
+   closed – not operating on the trip dates
+   day    – Universal only: gone when the day park shuts at 6pm
+   hhn    – Universal only: still running during Halloween Horror Nights
+
+   Universal's day/hhn split is from Inside Universal's HHN 2026 guide and
+   halloweenhorrornights.net (both fetched 2026-09-07). Jurassic World is
+   closed during HHN this year — a change from previous years.
+*/
+window.FLAGS = {
+  must:   { label: "Must do",  cls: "f-must" },
+  skip:   { label: "Skip",     cls: "f-skip" },
+  closed: { label: "Closed",   cls: "f-closed" },
+  day:    { label: "Day only", cls: "f-day" },
+  hhn:    { label: "Open at HHN", cls: "f-hhn" },
+};
+
+window.TRIP_FLAGS = {
+  /* -------- Universal: after 6pm only the HHN list keeps running -------- */
+  "u-studio-tour":  { f: ["must", "day"], n: "Becomes the Terror Tram after dark — ride it first" },
+  "u-waterworld":   { f: ["must", "day"], n: "Check the last showtime when you scan in" },
+  "u-jurassic":     { f: ["must", "day"], n: "Closed during HHN this year — daylight or never" },
+  "u-ff-drift":     { f: ["must", "day"], n: "At night it's R.I.P. Tour only" },
+  "u-minion":       { f: ["skip", "day"], n: "Same sim as The Simpsons — do that one at night instead" },
+  "u-silly-swirly": { f: ["skip", "day"] },
+  "u-super-silly":  { f: ["skip", "day"] },
+  "u-dinoplay":     { f: ["skip", "day"] },
+  "u-pets":         { f: ["day"] },
+  "u-kungfu":       { f: ["day"] },
+  "u-raptor":       { f: ["day"] },
+  "u-ollivanders":  { f: ["day"] },
+  "u-triwizard":    { f: ["day"] },
+
+  "u-mummy":        { f: ["must", "hhn"], n: "Save it for the event — walk-on late with Express" },
+  "u-mario-kart":   { f: ["must", "hhn"], n: "Nintendo World is open 7–10pm; the ride shuts ~9pm" },
+  "u-transformers": { f: ["hhn"] },
+  "u-simpsons":     { f: ["hhn"] },
+  "u-hp-journey":   { f: ["hhn"], n: "Runs until 11:15pm during HHN" },
+  "u-hippogriff":   { f: ["skip", "hhn"], n: "45 seconds long" },
+  "u-bowser-jr":    { f: ["hhn"], n: "Inside Nintendo World, so 7–10pm" },
+
+  /* -------- Disneyland -------- */
+  "dl-indy":        { f: ["closed"], n: "Closed from Sept 8, no reopening date announced" },
+  "dl-teacups":     { f: ["closed"], n: "Closed from Sept 14" },
+  "dl-rise":        { f: ["must"], n: "Usually a paid Single Pass — book at 7:00am sharp" },
+  "dl-haunted":     { f: ["must"], n: "Nightmare Before Christmas overlay; 45+ min waits" },
+  "dl-pirates":     { f: ["must"] },
+  "dl-big-thunder": { f: ["must"] },
+  "dl-space":       { f: ["must"] },
+  "dl-jungle":      { f: ["must"] },
+  "dl-tiana":       { f: ["must"] },
+  "dl-runaway":     { f: ["must"] },
+  "dl-matterhorn":  { f: ["skip"], n: "Nostalgia, not a ride — it will rattle your spine" },
+  "dl-peter-pan":   { f: ["skip"], n: "45 minutes for 90 seconds" },
+  "dl-dumbo":       { f: ["skip"], n: "45 minutes for 90 seconds" },
+  "dl-autopia":     { f: ["skip"] },
+  "dl-buzz":        { f: ["skip"] },
+  "dl-astro-orbitor": { f: ["skip"] },
+  "dl-casey-jr":    { f: ["skip"] },
+  "dl-carrousel":   { f: ["skip"] },
+  "dl-gadgetcoaster": { f: ["skip"] },
+  "dl-fantasmic":   { n: "Pick one night show — this or the fireworks, not both" },
+  "dl-halloween-screams": { n: "Pick one night show — this or Fantasmic, not both" },
+
+  /* -------- California Adventure -------- */
+  "ca-racers":      { f: ["must"], n: "Highest wait in the resort — single rider line is your friend" },
+  "ca-guardians":   { f: ["must"] },
+  "ca-incredicoaster": { f: ["must"] },
+  "ca-soarin":      { f: ["must"] },
+  "ca-grizzly":     { f: ["must"], n: "Only if it's hot — you will get properly soaked" },
+  "ca-little-mermaid": { f: ["skip"] },
+  "ca-golden-zephyr": { f: ["skip"] },
+  "ca-jellyfish":   { f: ["skip"] },
+  "ca-monsters-inc": { f: ["skip"] },
+  "ca-goofy-sky":   { f: ["skip"], n: "Rougher than it's worth" },
+  "ca-world-of-color": { n: "See it Saturday — DCA shuts at 6pm Sunday for Oogie Boogie" },
+};
