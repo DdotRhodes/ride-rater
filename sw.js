@@ -1,5 +1,5 @@
 /* Offline cache. Park wifi is bad; the app should not care. */
-var CACHE = "ride-rater-v7";
+var CACHE = "ride-rater-v8";
 var ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./data.js",
   "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"
