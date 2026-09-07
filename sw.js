@@ -1,5 +1,5 @@
 /* Offline cache. Park wifi is bad; the app should not care. */
-var CACHE = "ride-rater-v6";
+var CACHE = "ride-rater-v7";
 var ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./data.js",
   "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"
@@ -13,7 +13,12 @@ self.addEventListener("install", function (e) {
 
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.map(function (k) { return k === CACHE ? null : caches.delete(k); }));
+    /* Only our own old caches. github.io is a shared origin — anything else
+       published under the same account has its own caches, and wiping them
+       would break somebody else's offline app. */
+    return Promise.all(keys.map(function (k) {
+      return (k !== CACHE && k.indexOf("ride-rater-") === 0) ? caches.delete(k) : null;
+    }));
   }).then(function () { return self.clients.claim(); }));
 });
 
