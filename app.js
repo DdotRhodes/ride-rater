@@ -39,7 +39,8 @@
   var me = load(K.me, null);
   var ratings = load(K.ratings, {});
   var peers = load(K.peers, {});
-  var prefs = load(K.prefs, { extras: false, separate: false });
+  var prefs = load(K.prefs, { extras: false, separate: false, tuck: true });
+  if (typeof prefs.tuck !== "boolean") prefs.tuck = true;
 
   var RIDES = window.RIDES, PARKS = window.PARKS;
   var FLAGS = window.FLAGS || {};
@@ -67,7 +68,28 @@
   });
   function landRank(r) { return landOrder[r.p + "|" + r.land]; }
 
-  var state = { park: "USH", filter: "all", q: "", view: "rides", rankMode: "me", editing: null, pick: null };
+  var state = {
+    park: "USH", filter: "all", q: "", view: "rides", rankMode: "me",
+    scope: "park", cmpScope: "park", showTucked: false, editing: null, pick: null
+  };
+
+  /* ---------------- maps ----------------
+     Neither park app can be opened to a named attraction from a link. Disney
+     publishes exactly one universal-link path for the Disneyland app
+     (/passes/renew/), and Universal's covers its park map but no individual
+     ride. So a pin in the phone's own map app is the honest answer, and it is
+     the one thing guaranteed to work on both phones. Coordinates come from the
+     same park feed as the ride list. */
+  var GEO = window.RIDE_GEO || {};
+  var IS_APPLE = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+  function mapUrl(r) {
+    var g = GEO[r.id];
+    if (!g) return null;
+    var ll = g[0] + "," + g[1];
+    return IS_APPLE
+      ? "https://maps.apple.com/?ll=" + ll + "&q=" + encodeURIComponent(r.n) + "&t=m"
+      : "https://www.google.com/maps/search/?api=1&query=" + ll;
+  }
 
   /* ---------------- toast ---------------- */
   var toastTimer;
@@ -439,9 +461,54 @@
     $("#progressWrap").innerHTML = '<span id="progressCount">' + n + '</span><span class="muted">/' + all.length + " rated</span>";
   }
 
+  function itemHtml(r, peer, withLand) {
+    var mine = ratings[r.id];
+    var theirs = peer && peer.ratings[r.id];
+    var right;
+    if (peer) {
+      right = '<div class="dual">' +
+        '<div class="mini' + (mine ? "" : " empty") + '">' + (mine ? mine.s : "–") + '<span class="who">you</span></div>' +
+        '<div class="mini' + (theirs ? "" : " empty") + '">' + (theirs ? theirs.s : "–") + '<span class="who">' + esc(shortName(peer.name)) + "</span></div></div>";
+    } else {
+      right = '<div class="score' + (mine ? " set" : "") + '">' + (mine ? mine.s : "–") + "</div>";
+    }
+    var sub = [];
+    if (withLand) sub.push(r.land);
+    if (typeLabel(r.type)) sub.push(typeLabel(r.type));
+    if (r.note) sub.push(r.note);
+    if (mine && mine.n) sub.push("“" + mine.n + "”");
+    return '<button class="item' + (hasFlag(r, "closed") ? " closed" : "") + '" data-id="' + r.id + '">' +
+      '<div class="item-main">' +
+      '<div class="item-name">' + esc(r.n) + badges(r) + "</div>" +
+      (sub.length ? '<div class="item-sub">' + esc(sub.join(" · ")) + "</div>" : "") +
+      "</div>" + right + "</button>";
+  }
+  function groupedHtml(list, peer) {
+    var html = "", land = null;
+    list.forEach(function (r) {
+      if (r.land !== land) {
+        land = r.land;
+        html += '<div class="landhead">' + esc(land) + "</div>";
+      }
+      html += itemHtml(r, peer, false);
+    });
+    return html;
+  }
+
+  /* "What next" answers the only question you actually ask in a queue line.
+     Time-boxed things lead: at Universal a must-do that dies when the day park
+     shuts at 6pm cannot be rescheduled, so it outranks everything. */
+  function nextRank(r) {
+    if (hasFlag(r, "must") && hasFlag(r, "day")) return 0;
+    if (hasFlag(r, "must")) return 1;
+    if (hasFlag(r, "day")) return 2;
+    return 3;
+  }
+
   function renderList() {
     var el = $("#list");
     var q = state.q.trim().toLowerCase();
+    var isNext = state.filter === "next";
     var flagFilter = FLAGS[state.filter] ? state.filter : null;
     var pool = flagFilter ? flaggedRides(state.park, flagFilter) : parkRides(state.park);
     var list = pool.filter(function (r) {
@@ -449,46 +516,58 @@
       if (state.filter === "todo" && ratings[r.id]) return false;
       if (state.filter === "done" && !ratings[r.id]) return false;
       if (state.filter === "rides" && r.type !== "ride") return false;
+      if (isNext) {
+        /* Already rated, written off, or not running: not a candidate. Shows
+           are noise here unless they're on the must list. */
+        if (ratings[r.id]) return false;
+        if (hasFlag(r, "closed") || hasFlag(r, "skip")) return false;
+        if (r.type !== "ride" && !hasFlag(r, "must")) return false;
+      }
       return true;
     });
-    list.sort(function (a, b) { return landRank(a) - landRank(b); });
+    if (isNext) {
+      list.sort(function (a, b) { return (nextRank(a) - nextRank(b)) || (landRank(a) - landRank(b)); });
+    } else {
+      list.sort(function (a, b) { return landRank(a) - landRank(b); });
+    }
 
-    if (!list.length) {
-      el.innerHTML = '<div class="empty-note">Nothing here.<br>Try a different filter, or turn on shows and extras under More.</div>';
-      return;
+    /* Rated rides drop out of the walking list into a fold at the bottom —
+       once you've scored something it is just taking up screen. A search is an
+       explicit request for a specific ride, so it overrides the fold. */
+    var tucked = [];
+    if (prefs.tuck && !q && !isNext && state.filter !== "done" && state.filter !== "todo") {
+      var keep = [];
+      list.forEach(function (r) { (ratings[r.id] ? tucked : keep).push(r); });
+      list = keep;
     }
 
     var peer = firstPeer();
-    var html = "", land = null;
-    list.forEach(function (r) {
-      if (r.land !== land) {
-        land = r.land;
-        html += '<div class="landhead">' + esc(land) + "</div>";
-      }
-      var mine = ratings[r.id];
-      var theirs = peer && peer.ratings[r.id];
-      var right;
-      if (peer) {
-        right = '<div class="dual">' +
-          '<div class="mini' + (mine ? "" : " empty") + '">' + (mine ? mine.s : "–") + '<span class="who">you</span></div>' +
-          '<div class="mini' + (theirs ? "" : " empty") + '">' + (theirs ? theirs.s : "–") + '<span class="who">' + esc(shortName(peer.name)) + "</span></div></div>";
-      } else {
-        right = '<div class="score' + (mine ? " set" : "") + '">' + (mine ? mine.s : "–") + "</div>";
-      }
-      var sub = [];
-      if (typeLabel(r.type)) sub.push(typeLabel(r.type));
-      if (r.note) sub.push(r.note);
-      if (mine && mine.n) sub.push("“" + mine.n + "”");
-      html += '<button class="item' + (hasFlag(r, "closed") ? " closed" : "") + '" data-id="' + r.id + '">' +
-        '<div class="item-main">' +
-        '<div class="item-name">' + esc(r.n) + badges(r) + "</div>" +
-        (sub.length ? '<div class="item-sub">' + esc(sub.join(" · ")) + "</div>" : "") +
-        "</div>" + right + "</button>";
-    });
+    var html = "";
+
+    if (list.length) {
+      html += isNext
+        ? list.map(function (r) { return itemHtml(r, peer, true); }).join("")
+        : groupedHtml(list, peer);
+    } else if (tucked.length) {
+      html += '<div class="empty-note">Everything here is rated. Nice work.</div>';
+    } else {
+      html += '<div class="empty-note">Nothing here.<br>Try a different filter, or turn on shows and extras under More.</div>';
+    }
+
+    if (tucked.length) {
+      html += '<button class="tuckhead" id="tuckToggle">' +
+        '<span class="caret">' + (state.showTucked ? "▾" : "▸") + "</span>" +
+        "Rated · " + tucked.length +
+        '<span class="muted small">' + (state.showTucked ? "hide" : "show") + "</span></button>";
+      if (state.showTucked) html += groupedHtml(tucked, peer);
+    }
+
     el.innerHTML = html;
     $$("#list .item").forEach(function (b) {
       b.onclick = function () { openSheet(b.dataset.id); };
     });
+    var tt = $("#tuckToggle");
+    if (tt) tt.onclick = function () { state.showTucked = !state.showTucked; renderList(); };
   }
 
   /* ---------------- rendering: ranking ---------------- */
@@ -497,10 +576,15 @@
     var peer = firstPeer();
     var rows = [];
 
-    RIDES.filter(visible).forEach(function (r) {
+    /* Scoped to the park you're standing in by default. On Sunday at
+       Disneyland, Friday's Universal scores are not part of the decision. */
+    var raters = 1 + peerList().length;
+    RIDES.filter(function (r) {
+      return visible(r) && (state.scope === "all" || r.p === state.park);
+    }).forEach(function (r) {
       var mine = ratings[r.id];
       if (state.rankMode === "me") {
-        if (mine) rows.push({ r: r, v: mine.s, label: null });
+        if (mine) rows.push({ r: r, v: mine.s, label: null, k: 1 });
       } else {
         var vals = [], who = [];
         if (mine) { vals.push(mine.s); who.push("you " + mine.s); }
@@ -510,13 +594,14 @@
         });
         if (vals.length) {
           var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
-          rows.push({ r: r, v: avg, label: who.join(" · ") });
+          rows.push({ r: r, v: avg, label: who.join(" · "), k: vals.length });
         }
       }
     });
 
     if (!rows.length) {
-      el.innerHTML = '<div class="empty-note">No ratings yet.<br>Go ride something.</div>';
+      el.innerHTML = '<div class="empty-note">No ratings here yet.<br>' +
+        (state.scope === "park" ? "Go ride something, or switch to all parks." : "Go ride something.") + "</div>";
       return;
     }
     rows.sort(function (a, b) { return b.v - a.v; });
@@ -528,8 +613,13 @@
       var medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i + 1);
       var v = state.rankMode === "both" ? (Math.round(row.v * 10) / 10) : row.v;
       var sub = row.label || parkName[row.r.p];
+      /* One person's 10 is weaker evidence than two people agreeing on 9. Say
+         how many of you it rests on rather than presenting an average of one. */
+      var tally = (state.rankMode === "both" && raters > 1)
+        ? '<span class="tally' + (row.k === raters ? " full" : "") + '">' + row.k + "/" + raters + "</span>"
+        : "";
       return '<div class="rankrow"><div class="rankpos' + (i < 3 ? " top" : "") + '">' + medal + "</div>" +
-        '<div class="item-main"><div class="item-name">' + esc(row.r.n) + "</div>" +
+        '<div class="item-main"><div class="item-name">' + esc(row.r.n) + tally + "</div>" +
         '<div class="item-sub">' + esc(sub) + "</div></div>" +
         '<div class="score set">' + v + "</div></div>";
     }).join("");
@@ -541,13 +631,17 @@
   /* ---------------- rendering: compare ---------------- */
   function renderCompare() {
     var el = $("#compareBody");
+    var chips = $("#cmpScopeChips");
     var peer = firstPeer();
+    if (chips) chips.classList.toggle("hidden", !peer);
     if (!peer) {
       el.innerHTML = '<div class="empty-note">Join the same trip and your scores appear beside each other by themselves. Or open their one-off link — note that sending yours does not bring theirs back.</div>';
       return;
     }
     var both = [], onlyMe = [], onlyThem = [];
-    RIDES.forEach(function (r) {
+    RIDES.filter(function (r) {
+      return state.cmpScope === "all" || r.p === state.park;
+    }).forEach(function (r) {
       var a = ratings[r.id], b = peer.ratings[r.id];
       if (a && b) both.push({ r: r, a: a.s, b: b.s, d: Math.abs(a.s - b.s) });
       else if (a) onlyMe.push({ r: r, a: a.s });
@@ -585,6 +679,12 @@
       html += '<div class="sectionhead">Only ' + esc(peer.name) + " rated</div>" + onlyThem.map(function (x) {
         return '<div class="cmprow"><div class="nm">' + esc(x.r.n) + '<div class="sub">' + esc(x.r.land) + '</div></div><div class="pill">' + x.b + "</div></div>";
       }).join("");
+    }
+    if (!html) {
+      var pn = "";
+      PARKS.forEach(function (p) { if (p.key === state.park) pn = p.short; });
+      html = '<div class="empty-note">Neither of you has rated anything at ' + esc(pn) +
+        " yet.<br>Switch to all parks below to see the rest.</div>";
     }
     el.innerHTML = html;
   }
@@ -739,8 +839,15 @@
       ps.classList.remove("hidden");
     } else ps.classList.add("hidden");
 
+    var mb = $("#mapBtn"), url = mapUrl(r);
+    if (url) { mb.href = url; mb.classList.remove("hidden"); }
+    else { mb.removeAttribute("href"); mb.classList.add("hidden"); }
+
     drawScores();
     $("#sheetBack").classList.remove("hidden");
+    var sb = $(".sheet-body");
+    if (sb) sb.scrollTop = 0;
+    fitSheet();
   }
 
   function drawScores() {
@@ -758,9 +865,27 @@
     });
   }
 
+  /* iOS does not shrink the layout viewport when the keyboard comes up, so
+     100dvh is still the whole screen and the Save button ends up underneath
+     the keys. visualViewport is the only thing that knows the real usable
+     height — cap the sheet to it, and pad the backdrop so the sheet rides
+     above the keyboard rather than behind it. */
+  function fitSheet() {
+    var back = $("#sheetBack"), sheet = $("#sheet"), vv = window.visualViewport;
+    if (!sheet || !back) return;
+    if (!vv || back.classList.contains("hidden")) {
+      sheet.style.maxHeight = ""; back.style.paddingBottom = "";
+      return;
+    }
+    var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    back.style.paddingBottom = kb ? kb + "px" : "";
+    sheet.style.maxHeight = Math.max(240, Math.round(vv.height) - 24) + "px";
+  }
+
   function closeSheet() {
     $("#sheetBack").classList.add("hidden");
     state.editing = null;
+    fitSheet();
   }
 
   function saveRating() {
@@ -848,6 +973,7 @@
     $("#nameEdit").value = me.name;
     $("#toggleExtras").checked = !!prefs.extras;
     $("#toggleSeparate").checked = !!prefs.separate;
+    $("#toggleTuck").checked = !!prefs.tuck;
     renderAll();
     if (pendingTrip) {
       var code = pendingTrip; pendingTrip = null;
@@ -885,6 +1011,22 @@
         c.classList.add("active");
         state.rankMode = c.dataset.rank;
         renderRank();
+      };
+    });
+    $$("#scopeChips .chip").forEach(function (c) {
+      c.onclick = function () {
+        $$("#scopeChips .chip").forEach(function (x) { x.classList.remove("active"); });
+        c.classList.add("active");
+        state.scope = c.dataset.scope;
+        renderRank();
+      };
+    });
+    $$("#cmpScopeChips .chip").forEach(function (c) {
+      c.onclick = function () {
+        $$("#cmpScopeChips .chip").forEach(function (x) { x.classList.remove("active"); });
+        c.classList.add("active");
+        state.cmpScope = c.dataset.scope;
+        renderCompare();
       };
     });
 
@@ -930,6 +1072,7 @@
     };
     $("#toggleExtras").onchange = function () { prefs.extras = this.checked; save(K.prefs, prefs); renderAll(); };
     $("#toggleSeparate").onchange = function () { prefs.separate = this.checked; save(K.prefs, prefs); renderAll(); };
+    $("#toggleTuck").onchange = function () { prefs.tuck = this.checked; save(K.prefs, prefs); renderAll(); };
 
     $("#forgetPeers").onclick = function () {
       if (!confirm("Remove everyone else's ratings? Yours stay.")) return;
@@ -1011,6 +1154,11 @@
     window.addEventListener("online", function () {
       if (trip) { sync.skip = 0; sync.fails = 0; syncTick(); }
     });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fitSheet);
+      window.visualViewport.addEventListener("scroll", fitSheet);
+    }
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
