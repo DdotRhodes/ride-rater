@@ -3,7 +3,11 @@
 A small web app for rating every ride at Universal Studios Hollywood, Disneyland Park
 and Disney California Adventure, built for a trip in mid-September 2026.
 
-**Live:** https://rate-the-rides.surge.sh
+**Live:** https://ddotrhodes.github.io/ride-rater/
+
+Repo: [DdotRhodes/ride-rater](https://github.com/DdotRhodes/ride-rater) (public — GitHub
+Pages on a free plan cannot serve a private repo). An older copy is still up at
+https://rate-the-rides.surge.sh; it is no longer the canonical one.
 
 ## What it does
 
@@ -47,7 +51,8 @@ public/
   sw.js                 offline cache
   manifest.webmanifest  PWA manifest
   icon-*.png            app icons
-deploy.py               publish to surge.sh
+deploy.py               publish to surge.sh (legacy mirror)
+publish_github.py       publish to GitHub Pages (canonical)
 ```
 
 ## Where the ride data came from
@@ -69,17 +74,28 @@ To refresh the list later, pull `/v1/entity/<parkId>/children` for each park:
 
 ## Deploying changes
 
+Bump `CACHE` in `public/sw.js` **first** whenever `app.js`, `styles.css` or `data.js`
+change — otherwise phones that already installed the app keep serving the cached old
+version.
+
+**GitHub Pages (canonical).** `publish_github.py` uploads `public/` to the repo root via
+the GitHub contents API, enables Pages, and waits for the build. It needs `GITHUB_TOKEN`
+from the OpenClaw secret store, which is only injected on the **Gateway exec path** — so
+run it through the `trader` agent's `gateway_exec` tool, not an ordinary shell:
+
 ```bash
-python3 deploy.py
+python3 rides/publish_github.py
 ```
 
-Bump `CACHE` in `public/sw.js` whenever `app.js`, `styles.css` or `data.js` change —
-otherwise phones that already installed the app keep serving the cached old version.
+It is idempotent: unchanged files are skipped, changed files are updated in place by sha.
+It deliberately does **not** upload `public/CNAME` — on GitHub Pages a `CNAME` file sets a
+custom domain, which would redirect the site at the old surge hostname and break it.
 
-Hosted on surge.sh under `micaopenclaw@proton.me` (free tier, email verified). The
-account password is in the OpenClaw secret store as `SURGE_PASSWORD`, write-only. Day
-to day it isn't needed: surge caches an auth token in `~/.netrc`.
+**surge.sh (legacy mirror).** `python3 deploy.py`. Account `micaopenclaw@proton.me`, free
+tier; password in the secret store as `SURGE_PASSWORD`, write-only, though day to day
+surge just uses the token cached in `~/.netrc`.
 
-It's a static site with no build step, so it can move to GitHub Pages, Netlify or
-Cloudflare Pages by dropping `public/` in — nothing here is surge-specific except
-`deploy.py` and the `CNAME` file.
+Every asset path in the app is relative (`./`), so it serves correctly from a subdirectory
+like `/ride-rater/` as well as from a domain root. Share links are built from
+`location.origin + location.pathname`, so they inherit whichever base the app is served
+from.
