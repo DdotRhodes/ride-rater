@@ -52,9 +52,13 @@ body{
 .search::placeholder{color:var(--mut)}
 .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex:0 0 auto;background:var(--bg2);border:1px solid var(--line);color:var(--mut);
+/* min-height 40 keeps a chip inside thumb-reach tolerance one-handed. */
+.chip{flex:0 0 auto;display:flex;align-items:center;min-height:40px;background:var(--bg2);
+  border:1px solid var(--line);color:var(--mut);
   border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .chip.active{background:var(--accent);border-color:var(--accent);color:#22200f}
+#scopeChips{margin-top:8px}
+#cmpScopeChips{margin:0 0 16px}
 
 /* ---------- list ---------- */
 main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -91,12 +95,24 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 .dual .mini .who{font-size:9px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-top:-2px}
 .dual .mini.empty{color:var(--mut)}
 .empty-note{color:var(--mut);text-align:center;padding:44px 20px;font-size:14px;line-height:1.6}
+/* rated rides, folded away */
+.tuckhead{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:22px 0 4px;
+  padding:12px 14px;background:transparent;border:1px dashed var(--line);border-radius:14px;
+  color:var(--mut);font:inherit;font-size:12px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;cursor:pointer}
+.tuckhead:active{background:var(--bg2)}
+.tuckhead .caret{font-size:11px}
+.tuckhead .muted{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600}
 
 /* ---------- rank ---------- */
 .rankrow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg2);
   border:1px solid var(--line);border-radius:14px;margin-bottom:8px}
 .rankpos{flex:0 0 26px;text-align:center;font-weight:700;color:var(--mut);font-size:14px}
 .rankpos.top{color:var(--accent);font-size:17px}
+/* how many of you the average rests on */
+.tally{display:inline-block;margin-left:7px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;
+  background:var(--bg3);color:var(--mut);border:1px solid var(--line);vertical-align:1px}
+.tally.full{background:rgba(78,201,126,.14);color:#6fdb99;border-color:rgba(78,201,126,.32)}
 
 /* ---------- cards ---------- */
 .card{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
@@ -136,7 +152,8 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#22200f}
 .btn.danger{background:transparent;border-color:#4a2b32;color:var(--bad)}
 .btn.block{display:block;width:100%;margin-top:14px}
-.iconbtn{background:none;border:none;color:var(--mut);font-size:19px;padding:6px 8px;cursor:pointer}
+.iconbtn{background:none;border:none;color:var(--mut);font-size:19px;cursor:pointer;
+  min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
 
 /* ---------- tab bar ---------- */
 .tabbar{flex:0 0 auto;z-index:30;display:flex;
@@ -149,11 +166,16 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 
 /* ---------- rating sheet ---------- */
 .sheetback{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.6);display:flex;align-items:flex-end}
-.sheet{width:100%;background:var(--bg2);border-radius:22px 22px 0 0;padding:8px 16px calc(18px + var(--safe-b));
+/* Bounded height with a scrolling middle: a long note plus the on-screen
+   keyboard used to push Save off the bottom of the screen. */
+.sheet{width:100%;max-height:calc(100dvh - 40px);display:flex;flex-direction:column;
+  background:var(--bg2);border-radius:22px 22px 0 0;padding:8px 16px calc(18px + var(--safe-b));
   border-top:1px solid var(--line);animation:up .22s cubic-bezier(.2,.9,.3,1)}
 @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.sheet-grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
-.sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.sheet-grab{flex:0 0 auto;width:38px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.sheet-head{flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.sheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.maplink{text-decoration:none;text-align:center;margin-top:0;margin-bottom:14px}
 .sheet-name{font-size:18px;font-weight:700;line-height:1.25;letter-spacing:-.2px}
 .peerscore{background:var(--bg3);border-radius:10px;padding:9px 12px;font-size:13px;margin-bottom:14px;color:var(--mut)}
 .peerscore b{color:var(--fg)}
@@ -164,7 +186,7 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 .note{width:100%;padding:12px;font:inherit;font-size:15px;border-radius:12px;border:1px solid var(--line);
   background:var(--bg3);color:var(--fg);resize:none;margin-bottom:14px}
 .note::placeholder{color:var(--mut)}
-.sheet-actions{margin-bottom:2px}
+.sheet-actions{flex:0 0 auto;margin-bottom:2px;padding-top:4px}
 
 /* ---------- toast ---------- */
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(88px + var(--safe-b));z-index:70;
