@@ -1,9 +1,10 @@
-/* Ride Rater — offline-first, local-only ratings with link sharing.
-   No server, no accounts. Your data lives in this browser. */
+/* Ride Rater — offline-first ratings with link sharing and optional live sync.
+   Your data lives in this browser first, always. Live sync is a bonus layer on
+   top: turn it off and every feature still works, link sharing included. */
 (function () {
   "use strict";
 
-  var K = { me: "rr.me", ratings: "rr.ratings", peers: "rr.peers", prefs: "rr.prefs" };
+  var K = { me: "rr.me", ratings: "rr.ratings", peers: "rr.peers", prefs: "rr.prefs", trip: "rr.trip" };
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
 
@@ -103,6 +104,21 @@
     return JSON.parse(unutf8(body));
   }
 
+  /* An invite link carries a trip code rather than a payload of scores: the
+     scores arrive from the server a moment later. Handled before the share
+     token so a link can never be read as both. */
+  function ingestTripHash() {
+    var m = /[#&]trip=([A-Za-z0-9\-]+)/.exec(location.hash || "");
+    if (!m) return false;
+    history.replaceState(null, "", location.pathname + location.search);
+    var code = normCode(m[1]);
+    if (code.length < 6) { toast("That invite link looked broken."); return false; }
+    if (trip && trip.code === code) { toast("You're already on that trip."); return false; }
+    pendingTrip = code;
+    return true;
+  }
+  var pendingTrip = null;
+
   async function ingestHash() {
     var m = /[#&]s=([A-Za-z0-9\-_]+)/.exec(location.hash || "");
     if (!m) return false;
@@ -127,6 +143,185 @@
     return true;
   }
   var pendingWelcome = null;
+
+  /* ---------------- live sync ----------------
+     Entirely optional. Ratings are written to this phone first and pushed
+     afterwards, so a dead connection costs nothing but freshness — which
+     matters, because park wifi is dreadful and the whole app is built to
+     survive it. Each person writes only their own record on the server, so two
+     phones can never overwrite one another's scores.
+
+     A trip code is a capability: whoever holds it can read and write the trip.
+     That is the right trade for ride scores and would be wrong for anything
+     that mattered more. */
+
+  var SYNC_BASE = "https://ride-rater-sync.netlify.app";
+  var CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; /* no O/0/I/1 to mistype */
+  var POLL_MS = 15000;
+  var PUSH_DEBOUNCE_MS = 1200;
+
+  var trip = load(K.trip, null);
+  var sync = { busy: false, dirty: false, lastOk: 0, lastErr: null, fails: 0, skip: 0 };
+  var pushTimer = null, pollTimer = null;
+
+  function newTripCode() {
+    var buf = new Uint8Array(8), out = "";
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(buf);
+    else for (var j = 0; j < 8; j++) buf[j] = Math.floor(Math.random() * 256);
+    for (var i = 0; i < 8; i++) out += CODE_ALPHABET.charAt(buf[i] % CODE_ALPHABET.length);
+    return out;
+  }
+  function prettyCode(c) { return c ? c.slice(0, 4) + "-" + c.slice(4) : ""; }
+  function normCode(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16); }
+  function tripLink(code) { return location.origin + location.pathname + "#trip=" + code; }
+
+  async function syncFetch(path, opts) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 12000) : null;
+    try {
+      var init = { cache: "no-store" };
+      if (opts) { for (var k in opts) init[k] = opts[k]; }
+      if (ctrl) init.signal = ctrl.signal;
+      var res = await fetch(SYNC_BASE + path, init);
+      if (!res.ok) throw new Error("http_" + res.status);
+      return await res.json();
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  /* Fold everyone else's server record into the local peers map. Peers picked
+     up from share links keep working — they are keyed by the same id. */
+  function absorbMembers(list) {
+    if (!Array.isArray(list)) return false;
+    var changed = false;
+    list.forEach(function (m) {
+      if (!m || !m.id) return;
+      if (me && m.id === me.id) return;
+      var prev = peers[m.id];
+      if (prev && prev.updated === m.updated && prev.name === m.name) return;
+      peers[m.id] = {
+        name: m.name || "Someone",
+        ratings: m.ratings || {},
+        updated: m.updated || Date.now()
+      };
+      changed = true;
+    });
+    if (changed) save(K.peers, peers);
+    return changed;
+  }
+
+  function syncOk(changed) {
+    sync.lastOk = Date.now();
+    sync.lastErr = null;
+    sync.fails = 0;
+    sync.skip = 0;
+    if (changed) renderAll(); else renderSync();
+  }
+  function syncFailed(e) {
+    sync.fails++;
+    sync.lastErr = (e && e.message) || "failed";
+    /* Back off so a dead connection is not hammered every 15s all day. */
+    sync.skip = Math.min(sync.fails, 8);
+    renderSync();
+  }
+
+  async function pushNow() {
+    if (!trip || !me || sync.busy) return;
+    sync.busy = true;
+    sync.dirty = false;
+    renderSync();
+    try {
+      var payload = {};
+      Object.keys(ratings).forEach(function (id) {
+        var v = ratings[id];
+        payload[id] = v.n ? { s: v.s, n: v.n } : { s: v.s };
+      });
+      var data = await syncFetch("/t/" + trip.code + "/" + me.id, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: me.name, ratings: payload })
+      });
+      syncOk(absorbMembers(data && data.members));
+    } catch (e) {
+      sync.dirty = true; /* try again on the next tick */
+      syncFailed(e);
+    } finally {
+      sync.busy = false;
+    }
+  }
+
+  async function pullNow() {
+    if (!trip || sync.busy) return;
+    sync.busy = true;
+    renderSync();
+    try {
+      var data = await syncFetch("/t/" + trip.code);
+      syncOk(absorbMembers(data && data.members));
+    } catch (e) {
+      syncFailed(e);
+    } finally {
+      sync.busy = false;
+    }
+  }
+
+  function pushSoon() {
+    if (!trip) return;
+    sync.dirty = true;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, PUSH_DEBOUNCE_MS);
+    renderSync();
+  }
+
+  function syncTick() {
+    if (!trip || document.hidden) return;
+    if (sync.skip > 0) { sync.skip--; return; }
+    if (sync.dirty) pushNow(); else pullNow();
+  }
+
+  function startSyncLoop() {
+    if (pollTimer) clearInterval(pollTimer);
+    if (!trip) return;
+    pollTimer = setInterval(syncTick, POLL_MS);
+  }
+
+  function joinTrip(code, announce) {
+    trip = { code: code, joined: Date.now() };
+    save(K.trip, trip);
+    sync.fails = 0; sync.skip = 0; sync.lastErr = null;
+    startSyncLoop();
+    renderSync();
+    if (me) pushNow();
+    if (announce) toast(announce);
+  }
+
+  function leaveTrip() {
+    trip = null;
+    try { localStorage.removeItem(K.trip); } catch (e) { /* private mode */ }
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    renderSync();
+  }
+
+  function syncStatusLine() {
+    if (!trip) return "";
+    if (sync.busy) return "Syncing…";
+    if (sync.dirty) return "Changes waiting to send…";
+    if (sync.lastErr) {
+      return sync.lastOk
+        ? "Offline — last synced " + ago(sync.lastOk) + ". Your ratings are safe on this phone."
+        : "Can't reach the server. Your ratings are safe on this phone.";
+    }
+    if (sync.lastOk) return "Synced " + ago(sync.lastOk) + ".";
+    return "Waiting for first sync…";
+  }
+
+  function ago(ts) {
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 10) return "just now";
+    if (s < 60) return s + "s ago";
+    var m = Math.round(s / 60);
+    if (m < 60) return m + " min ago";
+    return Math.round(m / 60) + "h ago";
+  }
 
   /* ---------------- helpers ---------------- */
   function peerList() {
@@ -357,8 +552,78 @@
     renderProgress();
     if (state.view === "rides") renderList();
     if (state.view === "rank") renderRank();
-    if (state.view === "compare") renderCompare();
+    if (state.view === "compare") { renderSync(); renderCompare(); }
     if (state.view === "more") renderStats();
+  }
+
+  /* ---------------- live sync UI ---------------- */
+  function renderSync() {
+    var el = $("#syncBody");
+    if (!el) return;
+    var html;
+
+    if (!trip) {
+      html =
+        '<p class="muted small">Turn this on and your scores appear on each other\'s phones by themselves — no swapping links every time. ' +
+        'Everything still saves on this phone first, so it keeps working when the park wifi does not.</p>' +
+        '<div class="row gap">' +
+        '<button id="syncStart" class="btn primary">Start a trip</button>' +
+        '</div>' +
+        '<label class="setrow" for="syncJoinCode">Or join the one your friend started</label>' +
+        '<div class="row gap">' +
+        '<input id="syncJoinCode" class="search" type="text" inputmode="latin" autocapitalize="characters" ' +
+        'autocomplete="off" spellcheck="false" maxlength="9" placeholder="ABCD-1234">' +
+        '<button id="syncJoin" class="btn">Join</button>' +
+        '</div>';
+    } else {
+      var others = peerList().length;
+      html =
+        '<p class="muted small">Anyone with this code sees your scores and you see theirs.</p>' +
+        '<div class="tripcode">' + esc(prettyCode(trip.code)) + "</div>" +
+        '<div class="row gap">' +
+        '<button id="syncInvite" class="btn primary">Send invite link</button>' +
+        '<button id="syncNow" class="btn">Sync now</button>' +
+        "</div>" +
+        '<div id="syncOut" class="shareout hidden"></div>' +
+        '<p class="muted small" id="syncStatus">' + esc(syncStatusLine()) + "</p>" +
+        '<p class="muted small">' +
+        (others ? others + (others === 1 ? " other person" : " other people") + " in your list." : "Nobody else has joined yet.") +
+        "</p>" +
+        '<div class="row gap"><button id="syncLeave" class="btn">Turn off live sync</button></div>';
+    }
+    el.innerHTML = html;
+
+    if (!trip) {
+      $("#syncStart").onclick = function () {
+        joinTrip(newTripCode(), "Trip started — send the invite link.");
+      };
+      $("#syncJoin").onclick = function () {
+        var c = normCode($("#syncJoinCode").value);
+        if (c.length < 6) { toast("That code looks too short."); return; }
+        joinTrip(c, "Joined. Fetching their scores…");
+      };
+      $("#syncJoinCode").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") $("#syncJoin").click();
+      });
+    } else {
+      $("#syncInvite").onclick = async function () {
+        var url = tripLink(trip.code);
+        if (navigator.share) {
+          try { await navigator.share({ title: "Rate the rides with me", text: "Join my ride-rating trip", url: url }); return; }
+          catch (e) { /* cancelled — fall through */ }
+        }
+        try { await navigator.clipboard.writeText(url); toast("Invite link copied"); return; }
+        catch (e) { /* no clipboard — show it */ }
+        $("#syncOut").textContent = url;
+        $("#syncOut").classList.remove("hidden");
+      };
+      $("#syncNow").onclick = function () { if (sync.dirty) pushNow(); else pullNow(); };
+      $("#syncLeave").onclick = function () {
+        if (!confirm("Turn off live sync? Everyone's ratings stay on this phone.")) return;
+        leaveTrip();
+        toast("Live sync off");
+      };
+    }
   }
 
   /* ---------------- rating sheet ---------------- */
@@ -414,6 +679,7 @@
     var note = $("#noteInput").value.trim().slice(0, 140);
     ratings[state.editing] = { s: state.pick, n: note, t: Date.now() };
     save(K.ratings, ratings);
+    pushSoon();
     var score = state.pick;
     closeSheet();
     renderAll();
@@ -424,6 +690,7 @@
     if (!state.editing) return;
     delete ratings[state.editing];
     save(K.ratings, ratings);
+    pushSoon();
     closeSheet();
     renderAll();
     toast("Rating cleared");
@@ -479,6 +746,13 @@
     $("#toggleExtras").checked = !!prefs.extras;
     $("#toggleSeparate").checked = !!prefs.separate;
     renderAll();
+    if (pendingTrip) {
+      var code = pendingTrip; pendingTrip = null;
+      joinTrip(code, "Joined the trip — fetching their scores…");
+    } else if (trip) {
+      startSyncLoop();
+      pullNow();
+    }
     if (pendingWelcome) { toast(pendingWelcome); pendingWelcome = null; }
   }
 
@@ -538,6 +812,7 @@
       if (!v) { this.value = me.name; return; }
       me.name = v; save(K.me, me);
       $("#whoami").textContent = "Rating as " + me.name;
+      pushSoon();
       toast("Name updated");
     };
     $("#toggleExtras").onchange = function () { prefs.extras = this.checked; save(K.prefs, prefs); renderAll(); };
@@ -549,7 +824,7 @@
     };
     $("#resetBtn").onclick = function () {
       if (!confirm("Erase all ratings, including yours? This cannot be undone.")) return;
-      [K.me, K.ratings, K.peers, K.prefs].forEach(function (k) { localStorage.removeItem(k); });
+      [K.me, K.ratings, K.peers, K.prefs, K.trip].forEach(function (k) { localStorage.removeItem(k); });
       location.reload();
     };
 
@@ -569,14 +844,17 @@
   /* ---------------- start ---------------- */
   (async function start() {
     wire();
+    ingestTripHash();
     await ingestHash();
     peers = load(K.peers, {});
     if (me) boot();
     else {
       $("#onboard").classList.remove("hidden");
-      if (pendingWelcome) {
+      var note = pendingWelcome ||
+        (pendingTrip ? "You've been invited to a trip." : null);
+      if (note) {
         $("#onboard").querySelector(".fineprint").textContent =
-          pendingWelcome + " Add your name to start rating alongside them.";
+          note + " Add your name to start rating alongside them.";
         pendingWelcome = null;
       }
       setTimeout(function () { $("#nameInput").focus(); }, 300);
@@ -585,6 +863,11 @@
        navigation — no reload, so start() never re-runs. Catch it explicitly,
        otherwise a second share link from the same person silently does nothing. */
     window.addEventListener("hashchange", async function () {
+      if (ingestTripHash()) {
+        var code = pendingTrip; pendingTrip = null;
+        if (me) joinTrip(code, "Joined the trip — fetching their scores…");
+        return;
+      }
       var got = await ingestHash();
       if (!got) return;
       peers = load(K.peers, {});
@@ -596,6 +879,15 @@
           pendingWelcome + " Add your name to start rating alongside them.";
         pendingWelcome = null;
       }
+    });
+
+    /* Coming back to the app is the moment a stale score is most annoying, so
+       sync on focus rather than waiting out the poll interval. */
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && trip) { sync.skip = 0; syncTick(); }
+    });
+    window.addEventListener("online", function () {
+      if (trip) { sync.skip = 0; sync.fails = 0; syncTick(); }
     });
 
     if ("serviceWorker" in navigator) {
