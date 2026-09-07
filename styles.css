@@ -6,11 +6,15 @@
   --safe-t: env(safe-area-inset-top, 0px);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--fg)}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);height:100%;overflow:hidden}
 body{
   font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   overscroll-behavior-y:none;
 }
+/* app shell: full-height flex column, so the tab bar is laid out rather than
+   floating over the page. Chrome on Android drifts fixed-position bars while
+   its URL bar collapses; this avoids fixed positioning entirely. */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
 .hidden{display:none !important}
 .muted{color:var(--mut)}
 .small{font-size:13px}
@@ -30,7 +34,7 @@ body{
 .fineprint{font-size:12px;color:var(--mut);margin-top:18px;line-height:1.5}
 
 /* ---------- top bar ---------- */
-.topbar{position:sticky;top:0;z-index:20;background:rgba(15,16,21,.92);backdrop-filter:blur(12px);
+.topbar{flex:0 0 auto;z-index:20;background:rgba(15,16,21,.92);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);padding:calc(var(--safe-t) + 10px) 14px 0}
 .topbar-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .brand{font-weight:700;font-size:18px;letter-spacing:-.3px}
@@ -42,7 +46,7 @@ body{
 .ptab.active{color:var(--fg);border-bottom-color:var(--accent)}
 
 /* ---------- toolbar ---------- */
-.toolbar{padding:12px 14px 4px;position:sticky;top:0;z-index:10}
+.toolbar{padding:12px 14px 4px;position:sticky;top:0;z-index:10;background:var(--bg)}
 .search{width:100%;padding:12px 14px;font-size:16px;border-radius:12px;border:1px solid var(--line);
   background:var(--bg2);color:var(--fg);margin-bottom:10px}
 .search::placeholder{color:var(--mut)}
@@ -53,7 +57,8 @@ body{
 .chip.active{background:var(--accent);border-color:var(--accent);color:#22200f}
 
 /* ---------- list ---------- */
-main{padding-bottom:calc(78px + var(--safe-b))}
+main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;padding-bottom:18px}
 .list{padding:6px 14px 10px}
 .landhead{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);
   margin:20px 0 8px;padding-left:2px}
@@ -124,8 +129,8 @@ main{padding-bottom:calc(78px + var(--safe-b))}
 .iconbtn{background:none;border:none;color:var(--mut);font-size:19px;padding:6px 8px;cursor:pointer}
 
 /* ---------- tab bar ---------- */
-.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;
-  background:rgba(15,16,21,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+.tabbar{flex:0 0 auto;z-index:30;display:flex;
+  background:var(--bg);border-top:1px solid var(--line);
   padding-bottom:var(--safe-b)}
 .tab{flex:1;background:none;border:none;color:var(--mut);font:inherit;font-size:10px;font-weight:600;
   padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
