@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Ride Rater</title>
+<meta name="description" content="Rate every ride at Universal Hollywood and Disneyland.">
+<meta name="theme-color" content="#12131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ride Rater">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ onboarding ============ -->
+<div id="onboard" class="onboard hidden">
+  <div class="onboard-card">
+    <div class="onboard-mark">★</div>
+    <h1>Ride Rater</h1>
+    <p class="muted">Universal Hollywood · Disneyland · California Adventure</p>
+    <label for="nameInput">What's your name?</label>
+    <input id="nameInput" type="text" placeholder="e.g. Dave" autocomplete="given-name" maxlength="18">
+    <button id="onboardGo" class="btn primary block">Start rating</button>
+    <p class="fineprint">Everything is stored on this phone. Nothing is uploaded anywhere. Share a link when you want to compare with someone.</p>
+  </div>
+</div>
+
+<!-- ============ app ============ -->
+<div id="app" class="hidden">
+
+  <header class="topbar">
+    <div class="topbar-row">
+      <div>
+        <div class="brand">Ride Rater</div>
+        <div id="whoami" class="muted small"></div>
+      </div>
+      <div id="progressWrap" class="progress-chip">
+        <span id="progressCount">0</span><span class="muted">/0 rides</span>
+      </div>
+    </div>
+    <nav class="parktabs" id="parkTabs"></nav>
+  </header>
+
+  <main id="main">
+
+    <!-- ---- rides view ---- -->
+    <section id="view-rides" class="view">
+      <div class="toolbar">
+        <input id="search" class="search" type="search" placeholder="Search rides…" autocomplete="off">
+        <div class="chips" id="filterChips">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="todo">Not rated</button>
+          <button class="chip" data-filter="done">Rated</button>
+          <button class="chip" data-filter="rides">Rides only</button>
+        </div>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+
+    <!-- ---- ranking view ---- -->
+    <section id="view-rank" class="view hidden">
+      <div class="toolbar">
+        <div class="chips" id="rankChips">
+          <button class="chip active" data-rank="me">My ranking</button>
+          <button class="chip" data-rank="both">Combined</button>
+        </div>
+      </div>
+      <div id="rankList" class="list"></div>
+    </section>
+
+    <!-- ---- compare view ---- -->
+    <section id="view-compare" class="view hidden">
+      <div class="pad">
+        <div class="card">
+          <h2>Share your ratings</h2>
+          <p class="muted small">Makes a link containing your scores. Send it to whoever you're rating with — when they open it, your scores land in their app next to theirs. Send a fresh one whenever you want to update them.</p>
+          <div class="row gap">
+            <button id="shareBtn" class="btn primary">Share my link</button>
+            <button id="copyBtn" class="btn">Copy link</button>
+          </div>
+          <div id="shareOut" class="shareout hidden"></div>
+        </div>
+        <div id="compareBody"></div>
+      </div>
+    </section>
+
+    <!-- ---- more view ---- -->
+    <section id="view-more" class="view hidden">
+      <div class="pad">
+        <div class="card">
+          <h2>Your stats</h2>
+          <div id="statsBody" class="stats"></div>
+        </div>
+        <div class="card">
+          <h2>Export</h2>
+          <p class="muted small">Grab your ratings as a file to keep after the trip.</p>
+          <div class="row gap">
+            <button id="csvBtn" class="btn">Download CSV</button>
+            <button id="jsonBtn" class="btn">Download JSON</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Settings</h2>
+          <label class="setrow" for="nameEdit">Your name</label>
+          <input id="nameEdit" class="search" type="text" maxlength="18">
+          <label class="switch">
+            <input type="checkbox" id="toggleExtras">
+            <span>Show shows, walkthroughs &amp; play areas</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="toggleSeparate">
+            <span>Show separate-ticket events (Horror Nights, Oogie Boogie Bash)</span>
+          </label>
+        </div>
+        <div class="card danger-card">
+          <h2>Danger zone</h2>
+          <div class="row gap">
+            <button id="forgetPeers" class="btn">Remove other people's ratings</button>
+            <button id="resetBtn" class="btn danger">Erase everything</button>
+          </div>
+        </div>
+        <p class="fineprint center">Ride list pulled from live park data on 7 Sept 2026.<br>Built for a trip. Have fun out there.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-view="rides"><span class="ico">≡</span>Rides</button>
+    <button class="tab" data-view="rank"><span class="ico">★</span>Ranking</button>
+    <button class="tab" data-view="compare"><span class="ico">⇄</span>Compare</button>
+    <button class="tab" data-view="more"><span class="ico">•••</span>More</button>
+  </nav>
+</div>
+
+<!-- ============ rating sheet ============ -->
+<div id="sheetBack" class="sheetback hidden">
+  <div id="sheet" class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-grab"></div>
+    <div class="sheet-head">
+      <div>
+        <div id="sheetName" class="sheet-name"></div>
+        <div id="sheetMeta" class="muted small"></div>
+      </div>
+      <button id="sheetClose" class="iconbtn" aria-label="Close">✕</button>
+    </div>
+    <div id="peerScore" class="peerscore hidden"></div>
+    <div class="scoregrid" id="scoreGrid"></div>
+    <textarea id="noteInput" class="note" rows="2" placeholder="A word about it (optional)"></textarea>
+    <div class="row gap sheet-actions">
+      <button id="saveBtn" class="btn primary grow">Save</button>
+      <button id="clearBtn" class="btn danger hidden">Clear</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
