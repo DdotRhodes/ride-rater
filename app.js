@@ -14,14 +14,22 @@
     window.scrollTo(0, 0);
   }
 
+  /* Set when a read threw rather than simply missing. The difference matters:
+     a failed read leaves us holding empty defaults, and uploading those would
+     wipe the server copy of a perfectly good set of ratings. */
+  var storageFailed = false;
   function load(k, d) {
     try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }
-    catch (e) { return d; }
+    catch (e) { storageFailed = true; return d; }
   }
+  /* Returns whether the write actually landed. Callers announce success — this
+     used to toast its own failure, which the caller's "Saved" toast then
+     overwrote a millisecond later, so a lost rating looked like a saved one. */
   function save(k, v) {
-    try { localStorage.setItem(k, JSON.stringify(v)); }
-    catch (e) { toast("Couldn't save — storage is full or blocked."); }
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch (e) { return false; }
   }
+  var STORAGE_ERR = "Couldn't save — this phone's storage is full or blocked.";
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -228,19 +236,31 @@
     return changed;
   }
 
-  function syncOk(changed) {
+  /* These record the outcome but deliberately do not render. Rendering while
+     sync.busy is still true paints "Syncing…" as the *final* state and nothing
+     redraws afterwards, so the status line sticks there forever. The redraw
+     happens in the finally block below, after busy is cleared. */
+  function syncOk() {
     sync.lastOk = Date.now();
     sync.lastErr = null;
     sync.fails = 0;
     sync.skip = 0;
-    if (changed) renderAll(); else renderSync();
   }
   function syncFailed(e) {
     sync.fails++;
     sync.lastErr = (e && e.message) || "failed";
     /* Back off so a dead connection is not hammered every 15s all day. */
     sync.skip = Math.min(sync.fails, 8);
-    renderSync();
+  }
+  /* Redraw with the true post-request state, and if a rating landed while the
+     request was in flight, send it promptly instead of waiting out the poll —
+     pushSoon's timer already fired and found us busy. */
+  function syncSettled(changed) {
+    sync.busy = false;
+    if (sync.dirty && !pushTimer && !sync.lastErr) {
+      pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, 400);
+    }
+    if (changed) renderAll(); else renderSync();
   }
 
   async function pushNow() {
@@ -248,6 +268,7 @@
     sync.busy = true;
     sync.dirty = false;
     renderSync();
+    var changed = false;
     try {
       var payload = {};
       Object.keys(ratings).forEach(function (id) {
@@ -259,12 +280,13 @@
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: me.name, ratings: payload })
       });
-      syncOk(absorbMembers(data && data.members));
+      changed = absorbMembers(data && data.members);
+      syncOk();
     } catch (e) {
       sync.dirty = true; /* try again on the next tick */
       syncFailed(e);
     } finally {
-      sync.busy = false;
+      syncSettled(changed);
     }
   }
 
@@ -272,13 +294,15 @@
     if (!trip || sync.busy) return;
     sync.busy = true;
     renderSync();
+    var changed = false;
     try {
       var data = await syncFetch("/t/" + trip.code);
-      syncOk(absorbMembers(data && data.members));
+      changed = absorbMembers(data && data.members);
+      syncOk();
     } catch (e) {
       syncFailed(e);
     } finally {
-      sync.busy = false;
+      syncSettled(changed);
     }
   }
 
@@ -304,7 +328,12 @@
 
   function joinTrip(code, announce) {
     trip = { code: code, joined: Date.now() };
-    save(K.trip, trip);
+    if (!save(K.trip, trip)) {
+      trip = null;
+      toast(STORAGE_ERR);
+      renderSync();
+      return;
+    }
     sync.fails = 0; sync.skip = 0; sync.lastErr = null;
     startSyncLoop();
     renderSync();
@@ -323,12 +352,15 @@
   function syncStatusLine() {
     if (!trip) return "";
     if (sync.busy) return "Syncing…";
-    if (sync.dirty) return "Changes waiting to send…";
+    /* A failure outranks "changes waiting": pending changes are the normal
+       consequence of the failure, and showing only them hides the problem. */
     if (sync.lastErr) {
-      return sync.lastOk
+      return (sync.lastOk
         ? "Offline — last synced " + ago(sync.lastOk) + ". Your ratings are safe on this phone."
-        : "Can't reach the server. Your ratings are safe on this phone.";
+        : "Can't reach the server. Your ratings are safe on this phone.") +
+        (sync.dirty ? " Changes are waiting to send." : "");
     }
+    if (sync.dirty) return "Changes waiting to send…";
     if (sync.lastOk) return "Synced " + ago(sync.lastOk) + ".";
     return "Waiting for first sync…";
   }
@@ -351,7 +383,11 @@
   function firstPeer() { var p = peerList(); return p.length ? p[0] : null; }
 
   function visible(r) {
-    if (r.tag && !prefs.separate) return false;
+    /* A separate-ticket entry answers to its own toggle and nothing else. Every
+       Horror Nights house is typed as a walk-through, so making them obey the
+       extras toggle as well meant switching on "separate-ticket events" and
+       still being shown an empty list. */
+    if (r.tag) return !!prefs.separate;
     /* A must-do show — WaterWorld, say — is the last thing that should hide
        itself behind a preference. Everything else obeys the extras toggle. */
     if (r.type !== "ride" && !prefs.extras && !hasFlag(r, "must")) return false;
@@ -507,7 +543,7 @@
     var el = $("#compareBody");
     var peer = firstPeer();
     if (!peer) {
-      el.innerHTML = '<div class="empty-note">Once someone opens your link — or you open theirs — their scores show up here beside yours.</div>';
+      el.innerHTML = '<div class="empty-note">Join the same trip and your scores appear beside each other by themselves. Or open their one-off link — note that sending yours does not bring theirs back.</div>';
       return;
     }
     var both = [], onlyMe = [], onlyThem = [];
@@ -731,8 +767,16 @@
     if (!state.editing) return;
     if (!state.pick) { toast("Pick a score first."); return; }
     var note = $("#noteInput").value.trim().slice(0, 140);
-    ratings[state.editing] = { s: state.pick, n: note, t: Date.now() };
-    save(K.ratings, ratings);
+    var id = state.editing, prev = ratings[id];
+    ratings[id] = { s: state.pick, n: note, t: Date.now() };
+    /* Only claim it saved once it has. On failure put the old value back and
+       leave the sheet open, so the score is still on screen to retry rather
+       than living in memory until the tab dies. */
+    if (!save(K.ratings, ratings)) {
+      if (prev) ratings[id] = prev; else delete ratings[id];
+      toast(STORAGE_ERR);
+      return;
+    }
     pushSoon();
     var score = state.pick;
     closeSheet();
@@ -742,8 +786,13 @@
 
   function clearRating() {
     if (!state.editing) return;
-    delete ratings[state.editing];
-    save(K.ratings, ratings);
+    var id = state.editing, prev = ratings[id];
+    delete ratings[id];
+    if (!save(K.ratings, ratings)) {
+      if (prev) ratings[id] = prev;
+      toast(STORAGE_ERR);
+      return;
+    }
     pushSoon();
     closeSheet();
     renderAll();
@@ -805,7 +854,15 @@
       joinTrip(code, "Joined the trip — fetching their scores…");
     } else if (trip) {
       startSyncLoop();
-      pullNow();
+      /* sync.dirty lives only in memory. Rate something in a dead zone, lock
+         the phone, come back an hour later — the app reloads, the flag is gone,
+         and from then on it only ever pulls. Those scores would never reach the
+         other phone. So re-send our own record on every start: it is idempotent
+         and cannot touch theirs, because each member writes only their own blob.
+         The one case where it would do harm is a failed storage read, where
+         `ratings` is an empty fallback that would erase the server copy. */
+      if (storageFailed) pullNow();
+      else { sync.dirty = true; pushNow(); }
     }
     if (pendingWelcome) { toast(pendingWelcome); pendingWelcome = null; }
   }
@@ -864,7 +921,9 @@
     $("#nameEdit").onchange = function () {
       var v = this.value.trim().slice(0, 18);
       if (!v) { this.value = me.name; return; }
-      me.name = v; save(K.me, me);
+      var was = me.name;
+      me.name = v;
+      if (!save(K.me, me)) { me.name = was; this.value = was; toast(STORAGE_ERR); return; }
       $("#whoami").textContent = "Rating as " + me.name;
       pushSoon();
       toast("Name updated");
@@ -874,7 +933,10 @@
 
     $("#forgetPeers").onclick = function () {
       if (!confirm("Remove everyone else's ratings? Yours stay.")) return;
-      peers = {}; save(K.peers, peers); renderAll(); toast("Removed");
+      peers = {};
+      var ok = save(K.peers, peers);
+      renderAll();
+      toast(ok ? "Removed" : STORAGE_ERR);
     };
     $("#resetBtn").onclick = function () {
       if (!confirm("Erase all ratings, including yours? This cannot be undone.")) return;
@@ -886,7 +948,13 @@
       var v = $("#nameInput").value.trim().slice(0, 18);
       if (!v) { toast("Put a name in first."); $("#nameInput").focus(); return; }
       me = { id: Math.random().toString(36).slice(2, 9), name: v };
-      save(K.me, me);
+      /* If the identity will not persist, starting anyway means a brand-new
+         person on the next launch and every rating orphaned. Stop here. */
+      if (!save(K.me, me)) {
+        me = null;
+        toast("Storage is blocked on this browser — turn off Private Browsing and try again.");
+        return;
+      }
       $("#onboard").classList.add("hidden");
       boot();
     };
