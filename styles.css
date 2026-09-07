@@ -70,7 +70,17 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 .item-name{font-weight:600;font-size:15px;line-height:1.3}
 .item-sub{font-size:12px;color:var(--mut);margin-top:3px}
 .badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  padding:2px 6px;border-radius:5px;background:var(--bg3);color:var(--mut);margin-left:6px;vertical-align:1px}
+  padding:2px 6px;border-radius:5px;background:var(--bg3);color:var(--mut);margin-left:6px;vertical-align:1px;
+  white-space:nowrap}
+/* trip flags */
+.badge.f-must{background:rgba(78,201,126,.16);color:#6fdb99;border:1px solid rgba(78,201,126,.32)}
+.badge.f-skip{background:transparent;color:var(--mut);border:1px solid var(--line)}
+.badge.f-closed{background:rgba(242,119,122,.16);color:#ff9b9d;border:1px solid rgba(242,119,122,.34)}
+.badge.f-day{background:rgba(255,200,87,.15);color:var(--accent);border:1px solid rgba(255,200,87,.3)}
+.badge.f-hhn{background:rgba(160,132,255,.16);color:#b7a2ff;border:1px solid rgba(160,132,255,.32)}
+.item.closed{opacity:.5}
+.item.closed .item-name{text-decoration:line-through;text-decoration-color:var(--mut)}
+.sheet-name .badge{vertical-align:3px}
 .score{flex:0 0 auto;min-width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
   font-weight:700;font-size:18px;background:var(--bg3);color:var(--mut);border:1px solid var(--line)}
 .score.set{background:var(--accent);color:#22200f;border-color:var(--accent)}
