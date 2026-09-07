@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<!-- No maximum-scale: pinch-zoom stays available. Blocking it saves nothing and
+     costs you the ability to read the screen in bright sun. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ride Rater</title>
 <meta name="description" content="Rate every ride at Universal Hollywood and Disneyland.">
 <meta name="theme-color" content="#12131a">
@@ -53,6 +55,7 @@
         <input id="search" class="search" type="search" placeholder="Search rides…" autocomplete="off">
         <div class="chips" id="filterChips">
           <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="next">What next</button>
           <button class="chip" data-filter="todo">Not rated</button>
           <button class="chip" data-filter="done">Rated</button>
           <button class="chip" data-filter="rides">Rides only</button>
@@ -71,13 +74,24 @@
           <button class="chip active" data-rank="me">My ranking</button>
           <button class="chip" data-rank="both">Combined</button>
         </div>
+        <div class="chips" id="scopeChips">
+          <button class="chip active" data-scope="park">This park</button>
+          <button class="chip" data-scope="all">All parks</button>
+        </div>
       </div>
       <div id="rankList" class="list"></div>
     </section>
 
     <!-- ---- compare view ---- -->
     <section id="view-compare" class="view hidden">
+      <!-- Results first: comparing is the thing you do all day, setting up
+           sharing is the thing you do once. -->
       <div class="pad">
+        <div id="compareBody"></div>
+        <div class="chips" id="cmpScopeChips">
+          <button class="chip active" data-scope="park">This park</button>
+          <button class="chip" data-scope="all">All parks</button>
+        </div>
         <div class="card">
           <h2>Live sync</h2>
           <div id="syncBody"></div>
@@ -91,7 +105,6 @@
           </div>
           <div id="shareOut" class="shareout hidden"></div>
         </div>
-        <div id="compareBody"></div>
       </div>
     </section>
 
@@ -122,6 +135,18 @@
             <input type="checkbox" id="toggleSeparate">
             <span>Show separate-ticket events (Horror Nights, Oogie Boogie Bash)</span>
           </label>
+          <label class="switch">
+            <input type="checkbox" id="toggleTuck">
+            <span>Tuck rated rides into a section at the bottom</span>
+          </label>
+        </div>
+        <div class="card">
+          <h2>Official park maps</h2>
+          <p class="muted small">Tapping a ride here gives you a pin in Apple or Google Maps, which is the only thing that works everywhere. The Disneyland app can't be opened to a particular ride by a link — Disney doesn't publish one. Universal's app can at least be opened to its map.</p>
+          <div class="row gap">
+            <a class="btn" href="https://www.universalstudioshollywood.com/web/en/us/park-map" target="_blank" rel="noopener">Universal park map</a>
+            <a class="btn" href="https://disneyland.disney.go.com/maps/" target="_blank" rel="noopener">Disneyland map</a>
+          </div>
         </div>
         <div class="card danger-card">
           <h2>Danger zone</h2>
@@ -155,9 +180,14 @@
       </div>
       <button id="sheetClose" class="iconbtn" aria-label="Close">✕</button>
     </div>
-    <div id="peerScore" class="peerscore hidden"></div>
-    <div class="scoregrid" id="scoreGrid"></div>
-    <textarea id="noteInput" class="note" rows="2" placeholder="A word about it (optional)"></textarea>
+    <!-- Scrollable middle so a long note plus the on-screen keyboard can never
+         push Save off the bottom of the screen. -->
+    <div class="sheet-body">
+      <div id="peerScore" class="peerscore hidden"></div>
+      <div class="scoregrid" id="scoreGrid"></div>
+      <textarea id="noteInput" class="note" rows="2" placeholder="A word about it (optional)"></textarea>
+      <a id="mapBtn" class="btn block maplink hidden" target="_blank" rel="noopener">📍 Show me where this is</a>
+    </div>
     <div class="row gap sheet-actions">
       <button id="saveBtn" class="btn primary grow">Save</button>
       <button id="clearBtn" class="btn danger hidden">Clear</button>
