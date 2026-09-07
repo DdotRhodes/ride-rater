@@ -1,5 +1,5 @@
 /* Offline cache. Park wifi is bad; the app should not care. */
-var CACHE = "ride-rater-v3";
+var CACHE = "ride-rater-v4";
 var ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./data.js",
   "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"
@@ -20,6 +20,9 @@ self.addEventListener("activate", function (e) {
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
+  /* Sync traffic must never be served from cache — a cached trip response
+     would show yesterday's scores and look like the sync had broken. */
+  if (req.url.indexOf("ride-rater-sync") !== -1) return;
   if (req.mode === "navigate") {
     e.respondWith(
       caches.match("./index.html").then(function (hit) {
