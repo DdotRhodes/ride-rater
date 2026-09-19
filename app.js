@@ -44,11 +44,6 @@
   var peers = load(K.peers, {});
   var prefs = load(K.prefs, { extras: false, separate: false, tuck: true });
   if (typeof prefs.tuck !== "boolean") prefs.tuck = true;
-  /* How you are riding today, which decides which queue's number is the one
-     that matters. Express is on by default because the trip has it at Universal
-     after 2pm; it does nothing at the Disney parks, where no ride reports one. */
-  if (typeof prefs.express !== "boolean") prefs.express = true;
-  if (typeof prefs.single !== "boolean") prefs.single = true;
 
   var RIDES = window.RIDES, PARKS = window.PARKS;
   var FLAGS = window.FLAGS || {};
@@ -77,16 +72,9 @@
   function landRank(r) { return landOrder[r.p + "|" + r.land]; }
 
   var state = {
-    park: "USH", filter: "all", q: "", view: "now", rankMode: "me",
-    scope: "park", cmpScope: "park", showTucked: false, editing: null, pick: null,
-    /* Where you are standing, if you have told the app. Held in memory only:
-       a stale position from an hour ago is worse than none, and it is the one
-       piece of data here that has no business outliving the session. */
-    position: null, positionAt: 0, positionSource: null, locating: false,
-    planAll: false
+    park: "USH", filter: "all", q: "", view: "rides", rankMode: "me",
+    scope: "park", cmpScope: "park", showTucked: false, editing: null, pick: null
   };
-
-  var LIVE = window.LIVE || null;
 
   /* ---------------- maps ----------------
      Neither park app can be opened to a named attraction from a link. Disney
@@ -465,14 +453,7 @@
         esc(p.short) + ' <span class="muted">' + c.n + "/" + c.total + "</span></button>";
     }).join("");
     $$("#parkTabs .ptab").forEach(function (b) {
-      b.onclick = function () {
-        state.park = b.dataset.park;
-        /* Universal and the Disney pair are fetched separately, so switching
-           between them needs data the app has not asked for yet. */
-        if (LIVE && liveStarted) LIVE.refresh(state.park);
-        renderAll();
-        scrollMainTop();
-      };
+      b.onclick = function () { state.park = b.dataset.park; renderAll(); scrollMainTop(); };
     });
   }
 
@@ -504,7 +485,7 @@
       '<div class="item-main">' +
       '<div class="item-name">' + esc(r.n) + badges(r) + "</div>" +
       (sub.length ? '<div class="item-sub">' + esc(sub.join(" · ")) + "</div>" : "") +
-      "</div>" + waitChip(r) + right + "</button>";
+      "</div>" + right + "</button>";
   }
   function groupedHtml(list, peer) {
     var html = "", land = null;
@@ -744,367 +725,6 @@
       '<div class="stat"><div class="v" style="font-size:15px;line-height:1.3">' + esc(bestPark) + '</div><div class="k">Best park so far</div></div>';
   }
 
-  /* ---------------- rendering: now ----------------
-     The whole live layer is optional. Every function below has to survive
-     window.LIVE being absent, every fetch having failed, and the park being
-     shut, without ever showing a number it cannot stand behind. */
-
-  function fmtClock(ms) {
-    if (!ms) return "";
-    var d = new Date(ms);
-    var h = d.getHours(), m = d.getMinutes();
-    var ap = h >= 12 ? "pm" : "am";
-    h = h % 12; if (h === 0) h = 12;
-    return h + (m ? ":" + (m < 10 ? "0" : "") + m : "") + ap;
-  }
-  function fmtMins(n) {
-    if (n === null || n === undefined) return "—";
-    if (n <= 0) return "Walk on";
-    if (n < 60) return n + " min";
-    var h = Math.floor(n / 60), m = n % 60;
-    return h + "h" + (m ? " " + m + "m" : "");
-  }
-  /* Ages are stated, never rounded away. "2 min ago" and "an hour ago" have to
-     look different at a glance or the freshness warning is decoration. */
-  function fmtAge(ms) {
-    if (ms === null || ms === undefined) return "unknown";
-    var m = Math.round(ms / 60000);
-    if (m < 1) return "just now";
-    if (m === 1) return "1 min ago";
-    if (m < 60) return m + " min ago";
-    var h = Math.round(m / 60);
-    return h === 1 ? "an hour ago" : h + "h ago";
-  }
-  function parkName(key) {
-    for (var i = 0; i < PARKS.length; i++) if (PARKS[i].key === key) return PARKS[i].short;
-    return "This park";
-  }
-  /* Colour means "how long is this queue". A show has no queue — 45 minutes
-     until the next performance is not a bad thing, and painting it red would
-     say it was. Those get their own neutral colour. */
-  function waitClass(n, kind) {
-    if (kind === "show") return "w-show";
-    if (n === null || n === undefined) return "w-unknown";
-    if (n <= 15) return "w-short";
-    if (n <= 40) return "w-mid";
-    return "w-long";
-  }
-
-  /* The one number to show against a ride in a list, plus what kind of queue it
-     is. Never guesses: no data means no chip. */
-  function waitChip(r) {
-    if (!LIVE) return "";
-    var rec = LIVE.ride(r.id);
-    if (!rec) return "";
-    if (rec.status === "REFURBISHMENT") return '<span class="wait w-unknown">Refurb</span>';
-    if (rec.status === "DOWN") return '<span class="wait w-down">Down</span>';
-    var kind = "", n = null;
-    if (prefs.express && rec.express !== null) { n = rec.express; kind = "exp"; }
-    else if (prefs.single && rec.single !== null && (rec.standby === null || rec.single < rec.standby)) { n = rec.single; kind = "sr"; }
-    else n = rec.standby;
-    if (n === null) {
-      if (rec.status === "CLOSED") return '<span class="wait w-unknown">Closed</span>';
-      return "";
-    }
-    return '<span class="wait ' + waitClass(n) + '">' + esc(fmtMins(n)) +
-      (kind ? '<i>' + (kind === "exp" ? "EXP" : "SR") + "</i>" : "") + "</span>";
-  }
-
-  function renderLiveBar() {
-    var el = $("#liveBar");
-    if (!el) return;
-    if (!LIVE) { el.innerHTML = '<div class="live-warn">Live waits are unavailable in this build.</div>'; return; }
-    var f = LIVE.freshness(state.park);
-    var cls = "live-ok", msg;
-
-    if (f.busy && !f.newest) msg = "Fetching live wait times…";
-    else if (!f.newest) {
-      cls = "live-bad";
-      msg = f.anyOk
-        ? "No wait times for this park yet."
-        : "Couldn't reach the wait-time services. Nothing here is live.";
-    } else {
-      /* Say where the data came from and exactly how old it is. A wrong number
-         presented confidently is the only genuinely harmful thing this screen
-         could do. */
-      msg = "Waits from " + fmtAge(f.age);
-      if (f.useless) { cls = "live-bad"; msg = "Last waits were " + fmtAge(f.age) + " — treat them as history, not fact."; }
-      else if (f.stale) { cls = "live-warn"; msg = "Waits from " + fmtAge(f.age) + " — couldn't refresh since."; }
-      if (f.tp.err && f.qt.err) { cls = "live-bad"; msg += " Both feeds are unreachable."; }
-      else if (state.park === "USH" && f.qt.err) { cls = "live-warn"; msg += " Universal's wait feed is down."; }
-      else if (state.park !== "USH" && f.tp.err) { cls = "live-warn"; msg += " Disney's wait feed is down."; }
-    }
-    el.className = "livebar " + cls;
-    el.innerHTML = '<span class="live-msg">' + esc(msg) + "</span>" +
-      '<button class="btn tiny" id="liveRefresh"' + (f.busy ? " disabled" : "") + ">" +
-      (f.busy ? "…" : "Refresh") + "</button>";
-    var b = $("#liveRefresh");
-    if (b) b.onclick = function () { LIVE.refresh(state.park, { force: true }); };
-  }
-
-  function renderHoursBar() {
-    var el = $("#hoursBar");
-    if (!el) return;
-    var h = LIVE && LIVE.hours(state.park);
-    if (!h) { el.className = "hoursbar hidden"; el.textContent = ""; return; }
-    var bits = [];
-    /* A closed park is the first thing to say, not a footnote. Otherwise a full
-       screen of zero-minute waits reads as "everything is a walk-on". */
-    if (h.open) {
-      if (h.operating) bits.push("Park until " + fmtClock(h.operating.end));
-    } else if (h.opensAt) {
-      bits.push("Closed — opens " + fmtClock(h.opensAt));
-      if (h.operating && h.opensAt !== h.operating.start) bits.push("park until " + fmtClock(h.operating.end));
-    } else {
-      var last = h.ticketed ? h.ticketed.end : (h.operating ? h.operating.end : null);
-      bits.push(last ? "Closed — shut at " + fmtClock(last) : "Closed for the day");
-    }
-    /* The ticketed block is still worth stating while the day park is open: it
-       is the thing that decides whether a ride is worth saving for later. */
-    if (h.ticketed && (h.open || h.opensAt)) {
-      bits.push((h.ticketed.desc || "Ticketed event") + " " +
-        fmtClock(h.ticketed.start) + "–" + fmtClock(h.ticketed.end));
-    }
-    el.className = "hoursbar" + (h.open ? "" : " shut");
-    el.textContent = bits.join(" · ");
-  }
-
-  var BLOCK_LABEL = {
-    later: "Not open yet", done: "Closed for the day", shut: "Not running right now",
-    down: "Down right now", "too-late": "Not enough time left"
-  };
-
-  var WAIT_KIND_LABEL = {
-    express: " Express", single: " single rider", show: " until it starts", standby: " wait"
-  };
-  /* The sub-line under a name. `withLand` is off on the big card, which already
-     prints the land above it — otherwise it reads "Upper Lot · Upper Lot". */
-  function planLine(it, withLand) {
-    var bits = [];
-    if (it.walk !== null) bits.push(it.walk + " min walk");
-    else if (withLand) bits.push(it.ride.land);
-    if (it.wait !== null) bits.push(fmtMins(it.wait) + (WAIT_KIND_LABEL[it.waitKind] || " wait"));
-    return bits.join(" · ");
-  }
-
-  function planRow(it) {
-    var r = it.ride;
-    var right = it.blocked
-      ? '<span class="wait w-unknown">' + esc(it.blocked === "later" && it.opensIn ? "in " + fmtMins(it.opensIn) : BLOCK_LABEL[it.blocked]) + "</span>"
-      : '<span class="wait ' + waitClass(it.wait, it.waitKind) + '">' + esc(fmtMins(it.wait)) + "</span>";
-    return '<button class="item planrow" data-id="' + r.id + '">' +
-      '<div class="item-main"><div class="item-name">' + esc(r.n) + badges(r) + "</div>" +
-      '<div class="item-sub">' + esc(planLine(it, true)) + "</div></div>" + right + "</button>";
-  }
-
-  function renderNow() {
-    var el = $("#nowBody");
-    if (!el) return;
-    renderLiveBar();
-    renderHoursBar();
-    $("#chipExpress").classList.toggle("active", !!prefs.express);
-    $("#chipSingle").classList.toggle("active", !!prefs.single);
-    $("#chipExpress").classList.toggle("hidden", state.park !== "USH");
-    var lb = $("#chipLocate");
-    lb.classList.toggle("active", !!state.position);
-    lb.textContent = state.locating ? "📍 Finding you…"
-      : state.position ? "📍 " + (state.positionSource === "gps" ? "Using your location" : "Near " + state.positionSource)
-      : "📍 I'm here";
-
-    if (!LIVE) { el.innerHTML = '<div class="empty-note">Live planning is unavailable in this build.</div>'; return; }
-
-    var list = LIVE.plan({
-      park: state.park, express: prefs.express, single: prefs.single,
-      rated: ratings, position: state.position
-    }).filter(function (it) { return !wontDo(it.ride.id); });
-
-    if (!list.length) {
-      el.innerHTML = '<div class="empty-note">Nothing left to do here — everything is rated, marked won’t do, or not running.</div>';
-      return;
-    }
-
-    var open = list.filter(function (x) { return !x.blocked; });
-    var shut = list.filter(function (x) { return x.blocked; });
-    var f = LIVE.freshness(state.park);
-    var html = "";
-
-    var hrs = LIVE.hours(state.park);
-    if (!open.length) {
-      /* Distinguish the two reasons the list can be empty. "The park is shut"
-         is information; "nothing is running" on an open park is a warning. */
-      html += '<div class="empty-note">' +
-        (hrs && !hrs.open
-          ? esc(parkName(state.park)) + " is closed right now." +
-            (hrs.opensAt ? "<br>Gates open at " + esc(fmtClock(hrs.opensAt)) + "." : "")
-          : "Nothing here is running right now.<br>" +
-            (shut.length ? "Everything left is closed, down, or not open yet." : "")) +
-        "</div>";
-    } else {
-      var top = open[0];
-      /* A recommendation built on data this old is a guess. Say so on the card
-         itself rather than only in the status bar above it, which is exactly the
-         thing you scroll past. */
-      var caveat = f.useless
-        ? "Picked from wait times " + fmtAge(f.age) + " — check the board when you get there."
-        : f.stale ? "Based on waits " + fmtAge(f.age) + "." : null;
-
-      html += '<div class="sectionhead">Do this next</div>';
-      html += '<div class="pickcard" data-id="' + top.ride.id + '">' +
-        '<div class="pick-name">' + esc(top.ride.n) + "</div>" +
-        '<div class="pick-meta">' + esc([top.ride.land, planLine(top, false)].filter(Boolean).join(" · ")) + "</div>" +
-        '<div class="pick-wait ' + waitClass(top.wait, top.waitKind) + '">' + esc(fmtMins(top.wait)) + "</div>" +
-        (top.reasons.length ? '<ul class="pick-why">' + top.reasons.map(function (x) {
-          return "<li>" + esc(x) + "</li>";
-        }).join("") + "</ul>" : "") +
-        (caveat ? '<div class="pick-caveat">' + esc(caveat) + "</div>" : "") +
-        '<div class="row gap pick-actions">' +
-        '<button class="btn primary grow" data-act="rate">Rate it</button>' +
-        (mapUrl(top.ride) ? '<a class="btn" data-act="map" target="_blank" rel="noopener" href="' + esc(mapUrl(top.ride)) + '">Where</a>' : "") +
-        "</div></div>";
-
-      var SHOWN = 8;
-      var rest = open.slice(1, state.planAll ? open.length : SHOWN);
-      if (rest.length) {
-        html += '<div class="sectionhead">Then</div>' + rest.map(planRow).join("");
-        var hidden = open.length - SHOWN;
-        if (!state.planAll && hidden > 0) {
-          html += '<button class="tuckhead" id="planMore"><span class="caret">▸</span>' +
-            hidden + " more you could do<span class=\"muted small\">show</span></button>";
-        }
-      }
-    }
-
-    if (shut.length) {
-      html += '<button class="tuckhead" id="shutToggle"><span class="caret">' + (state.showShut ? "▾" : "▸") + "</span>" +
-        "Not right now · " + shut.length + '<span class="muted small">' + (state.showShut ? "hide" : "show") + "</span></button>";
-      if (state.showShut) html += shut.map(planRow).join("");
-    }
-
-    /* Queue-Times asks for this in exchange for the free feed, and Universal's
-       numbers here are entirely theirs. */
-    if (state.park === "USH") {
-      html += '<p class="fineprint center"><a href="https://queue-times.com/en-US" target="_blank" rel="noopener">Powered by Queue-Times.com</a></p>';
-    }
-
-    el.innerHTML = html;
-    var card = el.querySelector(".pickcard");
-    if (card) {
-      card.querySelector('[data-act="rate"]').onclick = function () { openSheet(card.dataset.id); };
-      card.onclick = function (e) {
-        if (e.target.closest("button") || e.target.closest("a")) return;
-        openSheet(card.dataset.id);
-      };
-    }
-    $$("#nowBody .planrow").forEach(function (b) {
-      b.onclick = function () { openSheet(b.dataset.id); };
-    });
-    var more = $("#planMore");
-    if (more) more.onclick = function () { state.planAll = true; renderNow(); };
-    var st = $("#shutToggle");
-    if (st) st.onclick = function () { state.showShut = !state.showShut; renderNow(); };
-  }
-
-  /* Live detail for one ride, shown in the rating sheet. Lightning Lane is the
-     place to be most careful: the feed says what the park is handing out right
-     now, which is not the same as what you are holding. Word it as the feed's
-     claim, never as advice about your own passes. */
-  function renderSheetLive(r) {
-    var el = $("#sheetLive");
-    if (!el) return;
-    var rec = LIVE && LIVE.ride(r.id);
-    if (!rec) { el.classList.add("hidden"); el.innerHTML = ""; return; }
-
-    var rows = [];
-    if (rec.standby !== null) rows.push(["Standby", fmtMins(rec.standby)]);
-    if (rec.single !== null) rows.push(["Single rider", fmtMins(rec.single)]);
-    if (rec.express !== null) rows.push(["Express", fmtMins(rec.express)]);
-    if (rec.standby === null && rec.single === null && rec.express === null && rec.status) {
-      rows.push(["Status", rec.status.charAt(0) + rec.status.slice(1).toLowerCase()]);
-    }
-    if (rec.showtimes && rec.showtimes.length) {
-      var next = rec.showtimes.map(function (s) { return Date.parse(s.startTime || ""); })
-        .filter(function (t) { return t && t > Date.now(); }).sort();
-      if (next.length) rows.push(["Next show", fmtClock(next[0])]);
-    }
-
-    var html = rows.length
-      ? '<div class="livegrid">' + rows.map(function (x) {
-          return '<div><span class="k">' + esc(x[0]) + '</span><span class="v">' + esc(x[1]) + "</span></div>";
-        }).join("") + "</div>"
-      : "";
-
-    if (rec.ll && rec.ll.state === "AVAILABLE" && rec.ll.start) {
-      html += '<div class="llnote">Lightning Lane being handed out for ' +
-        esc(fmtClock(Date.parse(rec.ll.start))) + "–" + esc(fmtClock(Date.parse(rec.ll.end))) +
-        '. <span class="muted">That is what the park is distributing now — this app does not know what passes you hold.</span></div>';
-    } else if (rec.ll && rec.ll.state) {
-      html += '<div class="llnote">Lightning Lane: ' + esc(String(rec.ll.state).toLowerCase()) +
-        '. <span class="muted">From the park feed; the app cannot see your own passes.</span></div>';
-    }
-    if (rec.paidLL && rec.paidLL.state === "AVAILABLE") {
-      html += '<div class="llnote">Individual Lightning Lane on sale' +
-        (rec.paidLL.price ? " at " + esc(rec.paidLL.price) : "") + ".</div>";
-    }
-
-    var age = LIVE.ageOf(rec);
-    html += '<div class="liveage">Updated ' + esc(fmtAge(age)) +
-      " · " + esc(rec.from.map(function (s) { return s === "tp" ? "ThemeParks.wiki" : "Queue-Times"; }).join(" + ")) + "</div>";
-
-    el.innerHTML = html;
-    el.classList.remove("hidden");
-  }
-
-  /* An honest account of what the app can and cannot see. The failure this is
-     here to prevent is a must-do that quietly has no live source at all. */
-  function renderCoverage() {
-    var el = $("#coverageBody");
-    if (!el) return;
-    if (!LIVE) { el.innerHTML = '<p class="muted small">Live data is unavailable in this build.</p>'; return; }
-    /* Scoped to the park you are in. Only one park's feeds are loaded at a
-       time, so an unscoped view would list every Disney must-do as missing
-       while you are standing in Universal, which is alarming and wrong. */
-    var c = LIVE.coverage(state.park);
-    var f = LIVE.freshness(state.park);
-    var html = '<p class="muted small">For ' + esc(parkName(state.park)) + ".</p>" +
-      '<div class="stats">' +
-      '<div class="stat"><div class="v">' + c.mapped + "/" + c.total + '</div><div class="k">Matched to a feed</div></div>' +
-      '<div class="stat"><div class="v">' + c.live + '</div><div class="k">With live data now</div></div>' +
-      '<div class="stat"><div class="v" style="font-size:15px;line-height:1.3">' + esc(fmtAge(f.age)) + '</div><div class="k">Freshest reading</div></div>' +
-      "</div>";
-
-    if (c.mustWithoutLive.length) {
-      html += '<div class="live-bad pad-sm">No live data for these must-dos: ' +
-        esc(c.mustWithoutLive.map(function (r) { return r.n; }).join(", ")) + "</div>";
-    }
-    if (c.unmapped.length) {
-      html += '<p class="muted small">Not carried by either feed: ' +
-        esc(c.unmapped.map(function (r) { return r.n; }).join(", ")) + "</p>";
-    }
-    /* The other direction. A feed carrying an attraction this app has never
-       heard of is not an error, but it is the only way to find out that the
-       catalogue has fallen behind — so it is shown rather than swallowed. */
-    var orph = (c.orphans.qt || []).concat(c.orphans.tp || []);
-    if (orph.length) {
-      var seen = {}, names = [];
-      orph.forEach(function (o) { if (!seen[o.name]) { seen[o.name] = 1; names.push(o.name); } });
-      html += '<p class="muted small">The feeds list ' + names.length +
-        " attraction" + (names.length === 1 ? "" : "s") + " this app does not have: " +
-        esc(names.join(", ")) + ".</p>";
-    }
-    if (c.drift.length) {
-      html += '<p class="muted small">A feed has renamed ' + c.drift.length +
-        " attraction" + (c.drift.length === 1 ? "" : "s") + " since this app was built: " +
-        esc(c.drift.slice(0, 4).map(function (d) { return d.expected + " → " + d.got; }).join("; ")) +
-        ". Waits still match by id, so they are correct.</p>";
-    }
-    html += '<p class="muted small">Disney waits, single rider, Lightning Lane windows and park hours come from ' +
-      '<a href="https://api.themeparks.wiki/" target="_blank" rel="noopener">ThemeParks.wiki</a>. ' +
-      'Universal waits, including the Horror Nights houses and their Express lines, are ' +
-      '<a href="https://queue-times.com/en-US" target="_blank" rel="noopener">Powered by Queue-Times.com</a>. ' +
-      'Neither feed knows which Lightning Lanes you hold, and this app never guesses at them.</p>';
-    el.innerHTML = html;
-  }
-
   /* "Day only" only means something at Universal, where the day park shuts at
      6pm and the HHN ticket takes over. Hide the chip elsewhere, and don't
      strand the user on an empty list if they switch parks while it's active. */
@@ -1125,11 +745,10 @@
     renderParkTabs();
     renderProgress();
     syncFilterChips();
-    if (state.view === "now") renderNow();
     if (state.view === "rides") renderList();
     if (state.view === "rank") renderRank();
     if (state.view === "compare") { renderSync(); renderCompare(); }
-    if (state.view === "more") { renderStats(); renderCoverage(); }
+    if (state.view === "more") renderStats();
   }
 
   /* ---------------- live sync UI ---------------- */
@@ -1232,7 +851,6 @@
     if (url) { mb.href = url; mb.classList.remove("hidden"); }
     else { mb.removeAttribute("href"); mb.classList.add("hidden"); }
 
-    renderSheetLive(r);
     drawScores();
     $("#sheetBack").classList.remove("hidden");
     var sb = $(".sheet-body");
@@ -1363,34 +981,6 @@
   }
 
   /* ---------------- wiring ---------------- */
-  /* Walking time is the difference between "20 minute wait" and "20 minute wait
-     plus a twelve minute walk across the park", which is often the whole
-     decision. Tapping the chip a second time turns it back off — position is
-     held in memory only and never written anywhere. */
-  function locateMe() {
-    if (state.position) {
-      state.position = null; state.positionSource = null; state.positionAt = 0;
-      renderNow();
-      return;
-    }
-    if (!navigator.geolocation) { toast("This browser won't share a location."); return; }
-    state.locating = true;
-    renderNow();
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      state.locating = false;
-      state.position = [pos.coords.latitude, pos.coords.longitude];
-      state.positionAt = Date.now();
-      state.positionSource = "gps";
-      renderNow();
-    }, function (err) {
-      state.locating = false;
-      renderNow();
-      toast(err && err.code === 1
-        ? "Location is off for this site — walking times stay hidden."
-        : "Couldn't get a location fix.");
-    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
-  }
-
   function setView(v) {
     state.view = v;
     $$(".view").forEach(function (s) { s.classList.add("hidden"); });
@@ -1400,25 +990,6 @@
     scrollMainTop();
   }
 
-  /* Live waits are a layer on top, started once the app itself is up. Nothing
-     below this line can stop the ratings app working: if live.js failed to load
-     or every request fails, LIVE is null or its state stays empty, and every
-     render path already treats that as "no live data" rather than an error. */
-  var liveStarted = false;
-  function startLive() {
-    if (!LIVE || liveStarted) return;
-    liveStarted = true;
-    /* A repaint per refresh, and only of the screen you are looking at. */
-    LIVE.onChange(function () {
-      if (state.view === "now") renderNow();
-      else if (state.view === "rides") renderList();
-      else if (state.view === "more") renderCoverage();
-      if (state.editing) renderSheetLive(byId[state.editing]);
-    });
-    LIVE.startPolling(function () { return state.park; });
-    LIVE.refresh(state.park);
-  }
-
   function boot() {
     $("#app").classList.remove("hidden");
     $("#whoami").textContent = "Rating as " + me.name;
@@ -1426,7 +997,6 @@
     $("#toggleExtras").checked = !!prefs.extras;
     $("#toggleSeparate").checked = !!prefs.separate;
     $("#toggleTuck").checked = !!prefs.tuck;
-    startLive();
     renderAll();
     if (pendingTrip) {
       var code = pendingTrip; pendingTrip = null;
@@ -1482,18 +1052,6 @@
         renderCompare();
       };
     });
-
-    /* How you are riding today. Both change which queue's number the whole app
-       shows, so they re-render everything, not just the planner. */
-    $$("#planChips .chip[data-pref]").forEach(function (c) {
-      c.onclick = function () {
-        var k = c.dataset.pref === "express" ? "express" : "single";
-        prefs[k] = !prefs[k];
-        save(K.prefs, prefs);
-        renderAll();
-      };
-    });
-    $("#chipLocate").onclick = locateMe;
 
     $("#sheetClose").onclick = closeSheet;
     $("#sheetBack").onclick = function (e) { if (e.target === $("#sheetBack")) closeSheet(); };

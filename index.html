@@ -49,24 +49,8 @@
 
   <main id="main">
 
-    <!-- ---- now view ----
-         The question you actually ask standing in a park: what next. Everything
-         on this screen is either live or labelled with how old it is. -->
-    <section id="view-now" class="view">
-      <div class="pad">
-        <div id="liveBar" class="livebar"></div>
-        <div id="hoursBar" class="hoursbar"></div>
-        <div class="chips" id="planChips">
-          <button class="chip" id="chipExpress" data-pref="express">Express</button>
-          <button class="chip" id="chipSingle" data-pref="single">Single rider</button>
-          <button class="chip" id="chipLocate">📍 I'm here</button>
-        </div>
-        <div id="nowBody"></div>
-      </div>
-    </section>
-
     <!-- ---- rides view ---- -->
-    <section id="view-rides" class="view hidden">
+    <section id="view-rides" class="view">
       <div class="toolbar">
         <input id="search" class="search" type="search" placeholder="Search rides…" autocomplete="off">
         <div class="chips" id="filterChips">
@@ -165,10 +149,6 @@
             <a class="btn" href="https://disneyland.disney.go.com/maps/" target="_blank" rel="noopener">Disneyland map</a>
           </div>
         </div>
-        <div class="card">
-          <h2>Live wait times</h2>
-          <div id="coverageBody"></div>
-        </div>
         <div class="card danger-card">
           <h2>Danger zone</h2>
           <div class="row gap">
@@ -176,18 +156,14 @@
             <button id="resetBtn" class="btn danger">Erase everything</button>
           </div>
         </div>
-        <p class="fineprint center">Ride list pulled from live park data on 7 Sept 2026.<br>
-          Live waits from <a href="https://api.themeparks.wiki/" target="_blank" rel="noopener">ThemeParks.wiki</a>
-          and <a href="https://queue-times.com/en-US" target="_blank" rel="noopener">Powered by Queue-Times.com</a>.<br>
-          Built for a trip. Have fun out there.</p>
+        <p class="fineprint center">Ride list pulled from live park data on 7 Sept 2026.<br>Built for a trip. Have fun out there.</p>
       </div>
     </section>
 
   </main>
 
   <nav class="tabbar">
-    <button class="tab active" data-view="now"><span class="ico">⚡</span>Now</button>
-    <button class="tab" data-view="rides"><span class="ico">≡</span>Rides</button>
+    <button class="tab active" data-view="rides"><span class="ico">≡</span>Rides</button>
     <button class="tab" data-view="rank"><span class="ico">★</span>Ranking</button>
     <button class="tab" data-view="compare"><span class="ico">⇄</span>Compare</button>
     <button class="tab" data-view="more"><span class="ico">•••</span>More</button>
@@ -208,7 +184,6 @@
     <!-- Scrollable middle so a long note plus the on-screen keyboard can never
          push Save off the bottom of the screen. -->
     <div class="sheet-body">
-      <div id="sheetLive" class="sheetlive hidden"></div>
       <button id="wontDoBtn" class="btn block">Won’t do</button>
       <p id="wontDoHint" class="muted small">Only on this phone. Removes it from your to-do list, not anyone else’s. Undo anytime under Won’t do.</p>
       <div id="peerScore" class="peerscore hidden"></div>
@@ -226,8 +201,6 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="data.js"></script>
-<script src="live-map.js"></script>
-<script src="live.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

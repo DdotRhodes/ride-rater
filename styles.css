@@ -104,63 +104,6 @@ main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
 .tuckhead .caret{font-size:11px}
 .tuckhead .muted{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600}
 
-/* ---------- live waits ----------
-   Colour is a hint here, never the message: every wait is also a number, and
-   every warning is also a sentence. Bright sun on a phone flattens hue long
-   before it flattens text. */
-.livebar{display:flex;align-items:center;gap:10px;min-height:44px;padding:9px 12px;
-  border-radius:12px;border:1px solid var(--line);background:var(--bg2);font-size:13px}
-.livebar .live-msg{flex:1 1 auto;line-height:1.35}
-.livebar.live-ok{color:var(--mut)}
-.livebar.live-warn{border-color:rgba(255,200,87,.4);background:rgba(255,200,87,.08);color:var(--accent)}
-.livebar.live-bad{border-color:rgba(242,119,122,.45);background:rgba(242,119,122,.09);color:#ff9b9d}
-.btn.tiny{flex:0 0 auto;padding:7px 11px;font-size:12px;border-radius:9px}
-.pad-sm{padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.4;margin:12px 0}
-.live-bad.pad-sm{border:1px solid rgba(242,119,122,.45);background:rgba(242,119,122,.09);color:#ff9b9d}
-
-.hoursbar{margin-top:8px;font-size:12px;color:var(--mut);letter-spacing:.01em}
-.hoursbar.shut{color:#ff9b9d;font-weight:600}
-#planChips{margin-top:12px}
-
-/* one wait time, against a ride, anywhere in the app */
-.wait{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-width:52px;height:44px;margin-right:8px;border-radius:12px;border:1px solid var(--line);
-  background:var(--bg3);color:var(--mut);font-size:13px;font-weight:700;line-height:1.1;
-  padding:0 6px;text-align:center}
-.wait i{font-style:normal;font-size:8px;letter-spacing:.08em;opacity:.75;margin-top:1px}
-.wait.w-short{color:#6fdb99;border-color:rgba(78,201,126,.34);background:rgba(78,201,126,.12)}
-.wait.w-mid{color:var(--accent);border-color:rgba(255,200,87,.3);background:rgba(255,200,87,.1)}
-.wait.w-long{color:#ff9b9d;border-color:rgba(242,119,122,.34);background:rgba(242,119,122,.1)}
-.wait.w-down{color:#ff9b9d;border-color:rgba(242,119,122,.45);font-size:11px}
-.wait.w-unknown{font-size:11px}
-.wait.w-show,.pick-wait.w-show{color:var(--accent2);border-color:rgba(99,164,255,.34);background:rgba(99,164,255,.11)}
-
-/* "do this next" */
-.pickcard{background:var(--bg2);border:1px solid var(--accent);border-radius:18px;padding:16px;
-  position:relative;cursor:pointer}
-.pick-name{font-size:20px;font-weight:700;letter-spacing:-.3px;line-height:1.2;padding-right:74px}
-.pick-meta{font-size:13px;color:var(--mut);margin-top:5px;padding-right:74px}
-.pick-wait{position:absolute;top:14px;right:14px;min-width:64px;height:52px;border-radius:14px;
-  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
-  border:1px solid var(--line);background:var(--bg3);color:var(--mut);text-align:center;padding:0 6px}
-.pick-wait.w-short{color:#6fdb99;border-color:rgba(78,201,126,.34);background:rgba(78,201,126,.12)}
-.pick-wait.w-mid{color:var(--accent);border-color:rgba(255,200,87,.3);background:rgba(255,200,87,.1)}
-.pick-wait.w-long{color:#ff9b9d;border-color:rgba(242,119,122,.34);background:rgba(242,119,122,.1)}
-.pick-why{margin:12px 0 0;padding-left:18px;font-size:13px;color:var(--mut);line-height:1.5}
-.pick-caveat{margin-top:10px;font-size:12px;color:var(--accent);line-height:1.4}
-.pick-actions{margin-top:14px}
-.planrow .item-sub{margin-top:3px}
-
-/* live detail inside the rating sheet */
-.sheetlive{background:var(--bg3);border-radius:12px;padding:12px;margin-bottom:14px}
-.livegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px}
-.livegrid > div{display:flex;flex-direction:column;gap:2px}
-.livegrid .k{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
-.livegrid .v{font-size:17px;font-weight:700}
-.llnote{margin-top:10px;font-size:12px;line-height:1.45;color:var(--fg)}
-.llnote .muted{color:var(--mut)}
-.liveage{margin-top:10px;font-size:11px;color:var(--mut)}
-
 /* ---------- rank ---------- */
 .rankrow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg2);
   border:1px solid var(--line);border-radius:14px;margin-bottom:8px}

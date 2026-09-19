@@ -55,9 +55,6 @@ window.RIDES = [
   { id: "dl-magical-life", p: "DL", land: "Main Street, U.S.A.", n: "Walt Disney – A Magical Life", type: "show" },
   { id: "dl-main-cinema",  p: "DL", land: "Main Street, U.S.A.", n: "Main Street Cinema", type: "walk" },
   { id: "dl-gallery",      p: "DL", land: "Main Street, U.S.A.", n: "The Disney Gallery", type: "walk" },
-  /* Added 2026-09-07 after verify-map.mjs showed both feeds carrying these and
-     the app carrying neither, which meant no way to rate them. */
-  { id: "dl-lincoln",      p: "DL", land: "Main Street, U.S.A.", n: "Great Moments with Mr. Lincoln", type: "show" },
 
   { id: "dl-jungle",       p: "DL", land: "Adventureland", n: "Jungle Cruise", type: "ride" },
   { id: "dl-indy",         p: "DL", land: "Adventureland", n: "Indiana Jones Adventure", type: "ride" },
@@ -98,7 +95,6 @@ window.RIDES = [
   { id: "dl-duck-pond",    p: "DL", land: "Mickey's Toontown", n: "Donald's Duck Pond", type: "play" },
   { id: "dl-goofy-yard",   p: "DL", land: "Mickey's Toontown", n: "Goofy's How-to-Play Yard", type: "play" },
   { id: "dl-minnie-house", p: "DL", land: "Mickey's Toontown", n: "Minnie's House", type: "walk" },
-  { id: "dl-mickey-house", p: "DL", land: "Mickey's Toontown", n: "Mickey's House", type: "walk" },
 
   { id: "dl-rise",         p: "DL", land: "Galaxy's Edge", n: "Star Wars: Rise of the Resistance", type: "ride" },
   { id: "dl-falcon",       p: "DL", land: "Galaxy's Edge", n: "Millennium Falcon: Smugglers Run", type: "ride" },
@@ -111,7 +107,6 @@ window.RIDES = [
   { id: "dl-autopia",      p: "DL", land: "Tomorrowland", n: "Autopia", type: "ride" },
   { id: "dl-astro-orbitor",p: "DL", land: "Tomorrowland", n: "Astro Orbitor", type: "ride" },
   { id: "dl-monorail",     p: "DL", land: "Tomorrowland", n: "Disneyland Monorail", type: "ride" },
-  { id: "dl-pixar-shorts", p: "DL", land: "Tomorrowland", n: "Pixar Short Film Spotlight", type: "show" },
 
   { id: "dl-fantasmic",    p: "DL", land: "Nighttime", n: "Fantasmic!", type: "show" },
   { id: "dl-halloween-screams", p: "DL", land: "Nighttime", n: "Halloween Screams (fireworks)", type: "show" },
@@ -299,7 +294,6 @@ window.RIDE_GEO = {
   "dl-magical-life": [33.810265, -117.918559],
   "dl-main-cinema": [33.810768, -117.918887],
   "dl-gallery": [33.810265, -117.918559],
-  "dl-lincoln": [33.810265, -117.918559],
   "dl-jungle": [33.81144, -117.920092],
   "dl-indy": [33.811306, -117.920327],
   "dl-tiki": [33.811829, -117.919569],
@@ -334,7 +328,6 @@ window.RIDE_GEO = {
   "dl-duck-pond": [33.815232, -117.919019],
   "dl-goofy-yard": [33.815199, -117.918686],
   "dl-minnie-house": [33.815525, -117.91899],
-  "dl-mickey-house": [33.815468, -117.919123],
   "dl-rise": [33.813859, -117.923079],
   "dl-falcon": [33.814867, -117.921379],
   "dl-shadows": [33.814988, -117.921242],
@@ -345,7 +338,6 @@ window.RIDE_GEO = {
   "dl-autopia": [33.812409, -117.916503],
   "dl-astro-orbitor": [33.812108, -117.91819],
   "dl-monorail": [33.812618, -117.91679],
-  "dl-pixar-shorts": [33.811604, -117.917208],
   "dl-fantasmic": [33.811687, -117.921151],
   "dl-halloween-screams": [33.81239, -117.918973],
   "dl-paint-night": [33.810978, -117.918961],
