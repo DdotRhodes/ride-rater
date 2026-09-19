@@ -73,7 +73,7 @@
 
   var state = {
     park: "USH", filter: "all", q: "", view: "rides", rankMode: "me",
-    scope: "park", cmpScope: "park", showTucked: false, editing: null, pick: null
+    scope: "park", cmpScope: "park", showTucked: false, showWont: false, editing: null, pick: null
   };
 
   /* ---------------- maps ----------------
@@ -546,6 +546,16 @@
       list = keep;
     }
 
+    // Keep personal skips out of the walking list, independently of rated folding.
+    // Search and the explicit Won’t do filter still reveal them directly.
+    var wont = [];
+    if (!q && state.filter !== "wont") {
+      list = list.filter(function (r) {
+        if (!wontDo(r.id)) return true;
+        wont.push(r);
+        return false;
+      });
+    }
     var peer = firstPeer();
     var html = "";
 
@@ -553,6 +563,8 @@
       html += isNext
         ? list.map(function (r) { return itemHtml(r, peer, true); }).join("")
         : groupedHtml(list, peer);
+    } else if (wont.length) {
+      html += '<div class="empty-note">Nothing left on this list. Your rated and won’t do rides are below.</div>';
     } else if (tucked.length) {
       html += '<div class="empty-note">Everything here is rated. Nice work.</div>';
     } else {
@@ -567,10 +579,19 @@
       if (state.showTucked) html += groupedHtml(tucked, peer);
     }
 
+    if (wont.length) {
+      html += '<button class="tuckhead" id="wontToggle" aria-expanded="' + !!state.showWont + '">' +
+        '<span class="caret">' + (state.showWont ? "▾" : "▸") + "</span>" +
+        "Won’t do · " + wont.length +
+        '<span class="muted small">' + (state.showWont ? "hide" : "show") + "</span></button>";
+      if (state.showWont) html += groupedHtml(wont, peer);
+    }
     el.innerHTML = html;
     $$("#list .item").forEach(function (b) {
       b.onclick = function () { openSheet(b.dataset.id); };
     });
+    var wt = $("#wontToggle");
+    if (wt) wt.onclick = function () { state.showWont = !state.showWont; renderList(); };
     var tt = $("#tuckToggle");
     if (tt) tt.onclick = function () { state.showTucked = !state.showTucked; renderList(); };
   }
